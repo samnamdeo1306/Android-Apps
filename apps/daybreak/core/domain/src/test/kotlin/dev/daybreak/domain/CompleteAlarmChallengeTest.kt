@@ -15,9 +15,10 @@ class CompleteAlarmChallengeTest {
     private val session = ChallengeSession(question, question.create(alarm))
     private class Repository : AlarmRepository {
         var saved: Alarm? = null
+        var writes = 0
         override fun observe() = flowOf(listOfNotNull(saved))
         override suspend fun get(id: String) = saved
-        override suspend fun save(alarm: Alarm) { saved = alarm }
+        override suspend fun save(alarm: Alarm) { saved = alarm; writes++ }
         override suspend fun delete(id: String) { saved = null }
     }
     private class Scheduler : AlarmScheduler {
@@ -30,7 +31,7 @@ class CompleteAlarmChallengeTest {
         }
         override fun cancel(id: String) { canceled = id }
     }
-    private val repository = Repository()
+    private val repository = Repository().apply { saved = alarm }
     private val scheduler = Scheduler()
     private val useCase = CompleteAlarmChallenge(repository, scheduler,
         Clock.fixed(Instant.ofEpochMilli(1_000_000), ZoneOffset.UTC))
@@ -40,7 +41,7 @@ class CompleteAlarmChallengeTest {
             try { useCase.execute(alarm, session, action, "no"); fail("Must reject wrong answer") }
             catch (_: IllegalArgumentException) { /* expected */ }
         }
-        assertNull(repository.saved); assertNull(scheduler.scheduled); assertNull(scheduler.canceled)
+        assertEquals(alarm, repository.saved); assertEquals(0, repository.writes); assertNull(scheduler.scheduled); assertNull(scheduler.canceled)
     }
     @Test fun correctAnswerDismissesAndCancelsPendingDelivery() = runBlocking {
         useCase.execute(alarm, session, AlarmAction.DISMISS, "yes")
@@ -59,6 +60,6 @@ class CompleteAlarmChallengeTest {
         scheduler.denied = true
         try { useCase.execute(alarm, session, AlarmAction.SNOOZE, "yes"); fail("Must fail") }
         catch (_: SecurityException) { /* caller must keep sound playing */ }
-        assertNull(repository.saved)
+        assertEquals(alarm, repository.saved)
     }
 }

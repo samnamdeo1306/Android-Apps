@@ -14,14 +14,14 @@ import dev.daybreak.domain.AlarmScheduler
 class AndroidAlarmScheduler(private val context: Context) : AlarmScheduler {
     private val manager = context.getSystemService(AlarmManager::class.java)
     fun canSchedule() = Build.VERSION.SDK_INT < 31 || manager.canScheduleExactAlarms()
-    private fun operation(id: String) = PendingIntent.getBroadcast(context, 0,
+    private fun operation(id: String, triggerAt: Long = -1) = PendingIntent.getBroadcast(context, 0,
         Intent(context, AlarmReceiver::class.java).setData("daybreak://alarm/$id".toUri())
-            .putExtra("alarmId", id), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+            .putExtra("alarmId", id).putExtra("expectedTrigger", triggerAt), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
     override fun schedule(alarm: Alarm) {
         if (!canSchedule()) throw dev.daybreak.domain.AlarmFailure(dev.daybreak.domain.AlarmFailureReason.EXACT_ACCESS_DENIED)
         val show = PendingIntent.getActivity(context, 0, Intent(context, MainActivity::class.java),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-        try { manager.setAlarmClock(AlarmManager.AlarmClockInfo(alarm.triggerAtMillis, show), operation(alarm.id)) }
+        try { manager.setAlarmClock(AlarmManager.AlarmClockInfo(alarm.triggerAtMillis, show), operation(alarm.id, alarm.triggerAtMillis)) }
         catch (_: SecurityException) {
             throw dev.daybreak.domain.AlarmFailure(dev.daybreak.domain.AlarmFailureReason.EXACT_ACCESS_DENIED)
         }

@@ -113,7 +113,7 @@ class UpdateAlarmTest {
     }
     @Test fun persistenceFailureDoesNotScheduleAnything() = runBlocking {
         saveFailure = true
-        expect(AlarmFailureReason.EDIT_RESTORE_FAILED) { edit() }
+        try { edit(); fail("Must fail") } catch (_: IllegalStateException) { }
         assertEquals(original, row); assertTrue(registrations.isEmpty())
     }
     @Test fun activationDuringPersistenceRollsBackWithoutReschedulingRingingAlarm() = runBlocking {

@@ -60,7 +60,7 @@ class RingingViewModel(
                 completeAlarm.execute(current.alarm, currentSession, action, answer)
                 playback.stop(current.alarm.id)
                 _state.update { it.copy(message = if (action == AlarmAction.SNOOZE)
-                    R.string.alarm_snoozed else R.string.alarm_dismissed) }
+                    R.string.alarm_snoozed else if (current.alarm.repeat != null) R.string.recurring_occurrence_dismissed else R.string.alarm_dismissed) }
             } catch (error: CancellationException) { throw error }
             catch (error: Exception) { _state.update { it.copy(message = error.messageResource(R.string.error_complete_alarm)) } }
             finally { _state.update { it.copy(busy = false) } }

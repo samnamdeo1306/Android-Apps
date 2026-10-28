@@ -15,7 +15,7 @@ The initial ADR-01 through ADR-15 entries below describe prototype choices. New 
 | ADR-07 | SCHEDULE_EXACT_ALARM special access | Explicit user-granted access without assuming store eligibility for USE_EXACT_ALARM | Permission may be revoked; creation and snooze must handle failure |
 | ADR-08 | Foreground media playback service | Sound survives leaving/recreating the screen | ViewModel playback ties ringing to UI; service still subject to OS restrictions |
 | ADR-09 | Explicit dependency composition | Easy to trace in an interview; no annotation-heavy graph | Adopt Hilt when scopes/testing/team size justify it |
-| ADR-10 | Fixed five-minute snooze and one-time alarms | Keeps the first end-to-end slice understandable | Recurrence and user preferences need separate product and time-zone policies |
+| ADR-10 | Fixed five-minute snooze and initial one-time alarms (weekly support: ADR-23) | Keeps the first end-to-end slice understandable | Recurrence and user preferences need separate product and time-zone policies |
 | ADR-11 | Local data, no Internet permission | Works offline with a small privacy surface | No cross-device backup or account recovery |
 | ADR-12 | Salted normalized answer digest | Avoid accidental plaintext retention; preserve friendly answer matching | Not a password KDF; dictionary guessing remains possible |
 | ADR-13 | Skip powered-off missed alarms | Avoid surprising sound immediately after reboot | Some users prefer catch-up ringing; make it a future explicit policy |
@@ -82,7 +82,7 @@ We do not add a generic `BaseUseCase`, a result wrapper for every return value, 
 
 ## ADR-17 — Next alarm UX increments (2026-10-28)
 
-**Status:** Accepted scope; recurrence policy remains proposed.
+**Status:** Accepted scope; recurrence policy remains proposed. The remaining feature order is revised by ADR-22 (recurrence before settings); scope and reliability dependencies are retained.
 
 **Decision:** Plan a shared create/edit time picker, editing, full-screen/idle delivery hardening, a sound settings screen, and weekday recurrence. Sequence them after the screen-specific MVVM split as detailed in ROADMAP.md. These expand the product scope beyond the 0.1.0 baseline; they do not change today's behavior.
 
@@ -129,6 +129,8 @@ AlarmTimeField accepts LocalTime and emits a confirmed LocalTime, with no ViewMo
 
 ## ADR-20 — Shared alarm editor and best-effort update compensation
 
+Persistence follow-up: ADR-23 adds transactional compare-and-write and a durable outbox; this original rationale is retained as history.
+
 - **Date:** 2026-10-28
 - **Status:** Accepted
 - **Implementation:** Implemented in AlarmEditorViewModel, shared AlarmEditorDialog, and UpdateAlarm. Validation results belong in CHANGELOG.md/TEST_PLAN.md. Durable reconciliation remains P0 work.
@@ -150,3 +152,87 @@ Reject missing or changed snapshots before writing, and check the current active
 ### Verification and follow-up
 
 Domain tests exercise unchanged-question retention, new-answer salting, strategy switches, time changes, completed rescheduling, missing/stale/active rejection, scheduling failure, rollback failures, activation during save and cancellation after persistence. ViewModel tests exercise prefill/cancel, duplicate save guard, inline failure state and stale/active protection. Device acceptance additionally needs existing alarm delivery identity, rotation during edits, permission revocation/restore and edits close to trigger time. This extends ADR-16's screen-specific state ownership and ADR-17's edit scope; it does not supersede the shared exit gate or the absolute-instant policy for saved one-time alarms.
+
+## ADR-21 — Bounded delivery wake-up and capability-aware alarm presentation
+
+Occurrence follow-up: ADR-23 replaces preference-backed active state with Room occurrence state and a process-local UI cache. This wake-lock/notification policy remains in force.
+
+- **Date:** 2026-10-28
+- **Status:** Accepted
+- **Implementation:** Receiver/service wake-lock handoff, serialized deliveries, validated notification presentation, channel diagnostics and active-only lock-screen window flags implemented. Android instrumentation added; actual run results and remaining API/device coverage are recorded in TEST_PLAN.md and CHANGELOG.md.
+
+### Context and decision
+
+The prototype used setAlarmClock and a foreground playback service, but returned from the alarm receiver without an explicit CPU wakefulness handoff. It posted a full-screen notification before loading/validating the alarm, and checked only app-level notifications/full-screen access. These gaps matter when the device is idle, an alarm was deleted/disabled, or a user lowered the ringing channel's importance.
+
+Keep setAlarmClock and service-owned MediaPlayer. Acquire a non-reference-counted partial wake lock in AlarmReceiver before starting the foreground service. The service synchronously acquires its own bounded startup lock before releasing the receiver token. Release startup ownership after the player starts (its existing MediaPlayer wake policy then applies), on failures, or on service destruction. Every startup lock has a 30-second timeout; process-local tokens provide independent/idempotent release and are not persisted. No indefinite receiver lock, screen wake lock, battery-optimization exemption, or WorkManager delivery replacement is introduced.
+
+Post an immediate silent loading foreground notification without a full-screen intent, then serialize repository loads and overlap decisions through a service-local Mutex. Only a valid enabled alarm taking the active slot gets the first ringing alert. Use a separate ringing notification ID so updating a loading notification cannot suppress the first full-screen opportunity. Repeated/overlapping deliveries do not repost the active ringing alert or replace playback. Existing one-minute overlap deferral remains best effort, not a durable queue.
+
+AlarmNotifications owns channel creation and capability checks. Preserve the stable channel ID and user importance choices; create the silent high-importance channel on application startup so setup checks inspect the real channel. Request full-screen only when app notifications, high channel importance and full-screen access are available. Always retain a notification content tap to the challenge and provide no direct completion actions. Notification title/body remain generic on the lock screen. API 35+ full-screen PendingIntent creation explicitly opts into background activity launch privileges, with the API 36 mode where available; the immutable explicit intent is restricted to MainActivity and is distinct from the ordinary content-tap token. No direct background startActivity fallback is used. Android decides presentation based on permissions and device state.
+
+MainActivity applies show-when-locked/turn-screen-on only while an alarm is active, updates on new intents and observes the shared active-ID flow. Normal home/editor visits do not keep alarm window flags. Setup now distinguishes a blocked/downgraded channel from app-level notification denial and links to its system settings.
+
+### Rationale, alternatives and tradeoffs
+
+Starting a foreground service alone does not bridge the wake-lock gap documented by AlarmManager. A timeout bounds the energy cost if startup fails; it is not a guarantee that audio will prepare in time. Always posting full-screen requests can wake for invalid/overlapping deliveries. Repeated notification updates can also re-alert an existing session. Separate loading/alert IDs and serialized delivery handling make those ownership points explicit without a generic event bus or new domain abstraction. Platform-specific policy stays in app; repository/scheduler ports, immutable screen state and the common snooze/dismiss gate remain unchanged.
+
+Audio startup errors are now consumed/logged and update the ongoing notification with localized failure feedback, preserving the challenge instead of crashing or claiming completion. Sound fallback/retry/vibration, guaranteed wakefulness after the startup timeout, permission-revocation recovery, durable sessions/scheduling, receiver/service-start failure recovery and OEM behavior remain limitations. A user can still suppress notifications or audio through system controls. No abstraction or permission opt-in promises production delivery.
+
+### Verification and sources
+
+Instrumentation tests cover actual Android notification fields and access-policy fallbacks, wake-lock independent release/timeout, and an emulator-only scheduled alarm under forced Doze through Room -> AlarmManager -> receiver -> foreground service. The test asserts deep IDLE before registering its short-delay alarm because an imminent setAlarmClock registration itself can prevent idle entry. Android may leave idle immediately to prepare that alarm. The end-to-end test checks foreground notification/content access and, when available, screen wake/MainActivity resumption; wrong answers for both actions remain gated. It cleans up its unique test record, service and forced-idle/battery state. This does not prove audible sound, physical secure-keyguard behavior or the full version/OEM matrix. Permission-denial policy tests inject capability snapshots; they do not replace device tests with permissions actually revoked.
+
+References: [AlarmManager wake-lock handoff](https://developer.android.com/reference/android/app/AlarmManager), [Doze behavior](https://developer.android.com/training/monitoring-device-state/doze-standby), [full-screen access limits](https://source.android.com/docs/core/permissions/fsi-limits), [background activity launch opt-ins](https://developer.android.com/guide/components/activities/secure-bal), and [AndroidX Test releases](https://developer.android.com/jetpack/androidx/releases/test). Pin AndroidX Test runner 1.7.0 and ext.junit 1.3.0 for instrumentation; production dependencies/toolchain stay unchanged.
+
+## ADR-22 — Prioritize recurrence before sound settings
+
+- **Date:** 2026-10-28
+- **Status:** Accepted
+- **Implementation:** Priority order retained. Recurrence is implemented by ADR-23; settings/sounds remain planned.
+
+**Context and decision:** The maintainer explicitly reprioritized the remaining features: implement recurring alarms next, then the settings screen and sound selection. This supersedes the remaining sequence in ADR-17 and the earlier roadmap; it does not supersede the running one-time baseline in ADR-10/ADR-15 or accept the proposed recurrence time-zone/DST semantics automatically.
+
+**Reasoning and alternatives:** Recurrence adds everyday scheduling utility and is the maintainer's current priority. Keeping settings first would deliver sound customization sooner with a smaller persistence change, but would defer repeat schedules. Accept the extra recurrence design/migration/reconciliation work ahead of customization; do not shortcut those dependencies merely to expose a weekday selector.
+
+**Tradeoffs and follow-up:** First establish rule-versus-occurrence state, the Room migration, durable scheduling reconciliation, snooze/dismiss semantics and the time-zone/DST policy. Keep both exit actions behind the same challenge gate and playback service-owned. The concrete recurrence policy in ROADMAP.md remains proposed until its design is finalized. Audio fallback, permissions, device coverage and other P0 release gates retain their priority even though the sound settings feature is deferred. No code behavior changes in this prioritization update.
+
+## ADR-23 — Weekly rules, persisted occurrences and a scheduling outbox
+
+- **Date:** 2026-10-29
+- **Status:** Accepted
+- **Implementation:** Weekly create/edit/list UI, recurrence policy, Room v2 migration, occurrence phases and durable schedule/cancel replay implemented. See TEST_PLAN.md and CHANGELOG.md for actual validation and outstanding device coverage.
+
+### Product policy
+
+The maintainer selected recurring alarms that follow the phone's local time when travelling. A nonempty weekday set defines a weekly rule; no days means once only. Calculate the next strictly future match at minute precision. A spring DST gap shifts forward by the gap (02:30 becomes 03:30 for a one-hour gap). An autumn overlap uses the earlier offset and rings once, not again at the second offset. Skip missed occurrences rather than playing a backlog.
+
+Snooze is five absolute minutes for the current occurrence, preserving the weekly rule and its original occurrence anchor. This alarm ID has one ringing/snoozed/deferred occurrence at a time; a regular slot crossed by snooze is coalesced into it instead of opening a second challenge. Correct dismiss rearms the next rule match after both the current clock and original anchor, so moving the clock backward does not rearm the completed occurrence. Both actions still use CompleteAlarmChallenge; wrong answers write nothing and service-owned playback stops only after success.
+
+One-time alarms retain their absolute instant. Future regular weekly occurrences rebase on startup, clock/time-zone changes, reboot and permission restoration. Future snoozes/overlap deferrals remain absolute instants. On reboot, skip a persisted ringing occurrence: advance a recurring rule or complete a one-time alarm. On ordinary process recovery, retain RINGING and resume through sticky service recreation or foreground app recovery. Puzzle prompts still regenerate after process death; durable prompt/session storage remains separate work.
+
+### Model and migration
+
+Alarm gains RepeatRule(time, weekdays), AlarmPhase (SCHEDULED/RINGING/SNOOZED/DEFERRED/COMPLETED) and occurrenceAtMillis, separate from triggerAtMillis (the pending delivery, including snooze). Keep enabled for compatibility. Room v2 stores weekday bits (Monday bit 0 through Sunday bit 6), minute of day, phase and occurrence anchor. The explicit 1→2 migration preserves IDs, labels, challenge IDs, questions, digests and triggers. Existing rows stay one-time; enabled rows become SCHEDULED, disabled rows COMPLETED. Both schemas are exported, with no destructive migration fallback.
+
+Room occurrence state replaces the SharedPreferences active-ID record as the durable source. The application flow is a fast process-local UI/window cache. A service claim persists RINGING using transactional compare-and-write before publishing the active ID. Editing, deletion and completion also reject stale snapshots. Alarm PendingIntents carry their expected trigger so the service can reject superseded or future delivery; legacy pending intents without that extra remain compatible when due. This is not universal exactly-once delivery or a durable multi-alarm queue.
+
+### Durable desired schedules
+
+Each Room save/compare-and-write/delete transaction upserts one schedule_commands row keyed by alarm ID with a fresh opaque token. It refers to the latest alarm row; a missing row means cancellation. There is deliberately no cascading foreign key that would erase deletion tombstones. ReconcileSchedules applies desired state through AlarmScheduler and acknowledges only the matching token. A crash after the OS effect but before acknowledgement is safe to replay with the same alarm ID. A newer write cannot be erased by an older acknowledgement. Failed scheduling remains pending, while independent cancellation work is still attempted.
+
+Foreground startup refreshes rows and starts a Room change collector for later commands. Boot, package replacement, exact-access regrant, TIME_SET and TIMEZONE_CHANGED also refresh/replay. Refresh requeues desired registrations because Android does not expose a complete authoritative registry of this app's exact alarms. Pending synchronization is visible with a retry action. Immediate use-case scheduling preserves success/error feedback; the durable outbox converges interrupted or compensation state at the next recovery trigger. No periodic worker or cross-system transaction is claimed.
+
+Foreground refresh retains a delivery due in the last 60 seconds so it does not steal an in-flight receiver/service handoff. Reboot and explicit clock/zone/permission/update refresh use strict missed-occurrence handling without this grace. Other overdue rows complete or advance. Force stop prevents recovery until Android/user allows execution again. Storage/compensation failures can still leave playback and desired state temporarily inconsistent; they are reported rather than treated as success.
+
+### Alternatives and tradeoffs
+
+Repeating AlarmManager APIs are inexact and do not represent weekday/DST/snooze policy. Adding only weekdays to an epoch timestamp conflates the rule with its occurrence. A generic event-sourcing engine adds ceremony beyond this sample. A small coalescing outbox, conditional acknowledgement and focused use cases address a concrete durability gap while preserving explainable ports and three modules. Repository defaults support simple in-memory test doubles; persistent adapters must implement equivalent transactional compare-and-write and outbox semantics, as Room does here.
+
+This supersedes ADR-10's initial once-only feature limit and the persistence/active-state portions of ADR-20/ADR-21. It retains fixed five-minute snooze, explicit composition, service audio ownership and ADR-15's one-time instant policy. Remaining release work includes durable prompts, robust audio recovery, richer overlap queuing, physical reboot/time-zone/permission tests, secure-keyguard/OEM coverage and long-running reliability evidence. Settings/sounds are next; custom dial styling stays P3.
+
+### Verification and references
+
+JVM tests cover weekday selection, strict future matching, DST, travel, midnight/year rollover, snooze coalescing, stale completion, missed/reboot handling, transient occurrence preservation, crash-before-ack replay and cancellation tombstones. Android tests open the real exported v1 schema to validate migration/data preservation and exercise transactional rule/occurrence/outbox behavior. Editor tests cover weekly/once selection, cancellation and snoozed-rule prefill. Run results are recorded separately from planned device checks.
+
+References: [Java zone resolution](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/time/LocalDateTime.html#atZone(java.time.ZoneId)), [Room migrations](https://developer.android.com/training/data-storage/room/migrating-db-versions), [Android alarm scheduling](https://developer.android.com/develop/background-work/services/alarms).

@@ -68,3 +68,29 @@ Time-picker validation: `:core:domain:test :app:testDebugUnitTest :app:assembleD
 - ADR-20 documents rationale, alternatives, tested compensation and remaining concurrency/crash/reconciliation limits. The custom Sinasamaki-style dial remains low-priority P3 work.
 
 Editing validation: 31 domain tests + 15 ViewModel tests passed with zero failures/errors/skips; debug assembly and lint succeeded. Final lint has dependency-update warnings only. API 30 emulator review verified Edit entry, prefilled name/time/challenge and save/reschedule copy; closed without saving. On-device rescheduling/delivery, permission recovery, rotation and near-trigger concurrency remain in TEST_PLAN.md. Durable reconciliation remains unimplemented, explicitly documented in ADR-20.
+
+## 2026-10-28 — Full-screen and idle delivery hardening
+
+- Added bounded receiver/service startup wake-lock handoff, released after playback starts or on failure/destruction.
+- Serialized service deliveries; use a silent loading notification followed by a separate validated ringing alert. Duplicates/overlaps do not intentionally replace the active alert or player.
+- Added capability-aware full-screen intent policy and Android 15+ creator launch options; content-tap challenge navigation remains available when permitted.
+- Limited lock-screen window wake flags to active alarms. Added ringing-channel importance diagnostics and system settings action.
+- Audio startup errors retain the challenge and report notification feedback; sound fallback/recovery remains future work.
+- Added Android instrumentation tests with pinned test-only dependencies. ADR-21 documents rationale, platform references and remaining delivery limits; results recorded after validation.
+
+Delivery validation: 31 domain + 15 ViewModel tests pass; 6 new Android tests pass on the API 30 emulator, zero failures/errors/skips. The Doze precondition was corrected to assert actual deep IDLE before registering the short-delay alarm (an imminent alarm itself prevents idle entry). Delivery then produced the ringing foreground notification and woke/resumed MainActivity; wrong answers remained gated. Post-run cleanup verified no Daybreak service/startup wake lock and idle state ACTIVE. App/test APK builds and lint passed; lint reports dependency-update warnings only. API 34+ real permission-denial paths, API 35/36 creator-mode runtime behavior and physical-device/audio/OEM coverage remain release gates.
+
+## 2026-10-28 — Feature priority update
+
+Recurring alarms now precede settings and alarm sounds (ADR-22). Implementation remains pending; recurrence's model, migration, reconciliation and time-zone/DST design are prerequisites. Existing P0 reliability and audio-recovery release gates are unchanged.
+
+## 2026-10-29 — Weekly recurring alarms
+
+- Added localized weekday selection to the shared editor; empty selection remains once only. The list shows repeat days and next delivery.
+- Weekly rules follow device-local time on travel, shift DST gaps forward and use the earlier overlap offset once. Snooze affects one occurrence; dismiss rearms the next match. Missed occurrences are skipped without backlog.
+- Added persisted occurrence phases/anchor and an explicit Room 1→2 migration preserving existing one-time IDs, answers and triggers; exported schema v2.
+- Added a transactional coalescing schedule/cancel outbox, conditional acknowledgement, replay on foreground/system recovery triggers and pending-sync feedback. Stale edit/delete/completion/delivery claims use compare-and-write; delivery intents carry expected triggers.
+- Room RINGING state replaces the preference-backed active ID as durable state. Service-owned playback and the shared answer gate remain intact; durable prompts, richer overlap handling and physical-device reliability coverage are still future work.
+- ADR-23 finalizes policy and documents alternatives, outbox guarantees, compensation/OS limits and remaining release gates. Settings/sounds remain next.
+
+2026-10-29 final automated results: 49 domain tests, 17 ViewModel tests and 8 Android tests passed, zero failures/errors/skips. Debug app/test APK builds and lint passed; the 16 lint warnings concern dependency updates only. Android results came from Pixel_3a_API_30 (Android 11), including actual v1→v2 migration, Room journal semantics and forced-idle delivery regression. Post-run checks found no Daybreak service or held startup wake lock and device idle state ACTIVE. Schema v1 remains unchanged. These results do not complete the physical/newer-API release matrix above.

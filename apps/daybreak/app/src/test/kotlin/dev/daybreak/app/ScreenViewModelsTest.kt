@@ -104,13 +104,13 @@ class ScreenViewModelsTest {
         model.submit(AlarmAction.SNOOZE, "yes"); runCurrent()
         assertEquals(0, stops)
         assertEquals(alarm.id, active.value)
-        assertEquals(0, repository.saves)
+        assertEquals(alarm, repository.rows.value.single())
         scheduler.denied = false
         model.submit(AlarmAction.SNOOZE, "yes")
         model.submit(AlarmAction.SNOOZE, "yes")
         runCurrent()
         assertEquals(1, stops)
-        assertEquals(1, repository.saves)
+        assertEquals(dev.daybreak.domain.AlarmPhase.SNOOZED, repository.rows.value.single().phase)
         assertNull(active.value)
     }
 
@@ -240,6 +240,37 @@ class ScreenViewModelsTest {
         assertEquals(R.string.error_stale_alarm, model.state.value.message)
         assertEquals(listOf(changed), repository.rows.value)
         assertFalse(model.state.value.saved)
+    }
+
+    @Test fun recurringDraftIsSavedAndEditingASnoozeUsesTheRuleTime() = runTest(dispatcher) {
+        val model = create()
+        val days = setOf(java.time.DayOfWeek.MONDAY, java.time.DayOfWeek.FRIDAY)
+        model.updateDraft(model.state.value.draft.copy(time = "07:30", repeatDays = days))
+        model.save(); runCurrent()
+        val saved = repository.rows.value.single()
+        assertEquals(days, saved.repeat?.days)
+        assertEquals(java.time.LocalTime.of(7, 30), saved.repeat?.time)
+        val snoozed = saved.copy(triggerAtMillis = System.currentTimeMillis() + 300_000,
+            phase = dev.daybreak.domain.AlarmPhase.SNOOZED)
+        repository.rows.value = listOf(snoozed)
+        model.edit(snoozed)
+        assertEquals("07:30", model.state.value.draft.time)
+        assertEquals(days, model.state.value.draft.repeatDays)
+        model.updateDraft(model.state.value.draft.copy(label = "Renamed"))
+        model.save(); runCurrent()
+        assertEquals(snoozed.triggerAtMillis, repository.rows.value.single().triggerAtMillis)
+        assertEquals(snoozed.phase, repository.rows.value.single().phase)
+    }
+
+    @Test fun emptyRepeatSelectionCreatesOneTimeAlarmAndCancelDoesNotPersistRuleEdits() = runTest(dispatcher) {
+        val model = create()
+        model.save(); runCurrent()
+        val once = repository.rows.value.single()
+        assertNull(once.repeat)
+        model.edit(once)
+        model.updateDraft(model.state.value.draft.copy(repeatDays = setOf(java.time.DayOfWeek.SUNDAY)))
+        model.close()
+        assertEquals(once, repository.rows.value.single())
     }
 
     private class Repository : AlarmRepository {

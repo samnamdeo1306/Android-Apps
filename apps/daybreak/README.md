@@ -6,14 +6,15 @@ A local-first Android alarm app that asks you to engage your mind before snoozin
 
 ## What the first increment does
 
-- Schedule multiple one-time alarms for the next occurrence of a local time.
+- Schedule one-time alarms or weekly weekday repeats that follow the phone's local time.
 - Select time using a themed clock dial or keyboard input, following the system 12/24-hour preference.
 - Choose a personal question with an agreed answer, or a generated addition puzzle.
 - Complete the same challenge gate for **both** dismiss and five-minute snooze.
 - Store alarms in Room and observe changes through Kotlin Flow.
 - Edit saved alarms with a shared prefilled editor, retaining ID and unchanged personal answers.
-- Ring through a foreground service with an alarm notification and permitted full-screen intent.
-- Restore future alarms after reboot/update; skip alarms missed while powered off.
+- Ring through a foreground service with bounded startup wake-lock handoff, a validated alarm notification and permitted full-screen intent.
+- Explain app notification, ringing-channel importance and full-screen access restrictions with settings actions.
+- Replay durable desired schedules after startup/reboot/update/access changes; skip missed occurrences without backlog.
 - Present a calm navy, peach, and mint Material 3 Compose interface.
 
 Name, palette, addition puzzle, five-minute snooze, and one-time scheduling are initial product defaults, not requirements imposed by Android. See the [PRD](docs/PRODUCT_REQUIREMENTS.md).
@@ -54,4 +55,8 @@ Dependency direction: `app → data → domain` and `app → domain`. Domain doe
 
 Tool versions are pinned in the version catalog. These are a compatible, reproducible modern baseline; “latest available” is not claimed without checking official release notes. Upgrade the Kotlin/Compose compiler/KSP/AGP/Gradle combination together and rerun the validation suite.
 
-The initial cloud build passed all 9 domain tests, APK assembly, and lint. Lint reports newer Kotlin and coroutines releases; these are dependency-update warnings, not proof of compatibility with the pinned AGP/KSP combination. Device checks remain outstanding. CI has been configured but has not yet run remotely.
+Current local validation (2026-10-29): 49 domain, 17 ViewModel and 8 Android tests pass, with no failures or skips. Debug APKs and lint pass; lint reports dependency-update warnings only. Android evidence is limited to the API 30 emulator, including migration/outbox and forced-idle delivery checks. Physical-device and broader Android-version acceptance remain outstanding; see the test plan. CI has been configured but has not yet run remotely.
+
+## Android delivery tests
+
+Use the existing emulator to run `./gradlew :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=dev.daybreak.app.alarm.AlarmDeliveryTest`. This includes an isolated test alarm that temporarily changes emulator screen/Doze/battery state and cleans it up; it is not part of the emulator-free JVM/build gate above. See TEST_PLAN.md for run results, skipped conditions and the remaining API/physical-device matrix.

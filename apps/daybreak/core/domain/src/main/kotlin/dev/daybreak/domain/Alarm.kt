@@ -14,13 +14,33 @@ data class Alarm(
     val question: String = "",
     val answerDigest: String = "",
     val enabled: Boolean = true,
+    val repeat: RepeatRule? = null,
+    val phase: AlarmPhase = AlarmPhase.SCHEDULED,
+    val occurrenceAtMillis: Long = triggerAtMillis,
 )
+
+enum class AlarmPhase { SCHEDULED, RINGING, SNOOZED, DEFERRED, COMPLETED }
+
+data class PendingSchedule(val alarmId: String, val token: String, val alarm: Alarm?)
 
 interface AlarmRepository {
     fun observe(): Flow<List<Alarm>>
     suspend fun get(id: String): Alarm?
     suspend fun save(alarm: Alarm)
     suspend fun delete(id: String)
+    suspend fun replace(expected: Alarm, changed: Alarm): Boolean {
+        if (get(expected.id) != expected) return false
+        save(changed)
+        return true
+    }
+    suspend fun deleteIfUnchanged(expected: Alarm): Boolean {
+        if (get(expected.id) != expected) return false
+        delete(expected.id)
+        return true
+    }
+    fun scheduleChanges(): Flow<Unit> = kotlinx.coroutines.flow.flowOf(Unit)
+    suspend fun pendingSchedules(): List<PendingSchedule> = emptyList()
+    suspend fun acknowledgeSchedule(alarmId: String, token: String) = Unit
 }
 
 interface AlarmScheduler {

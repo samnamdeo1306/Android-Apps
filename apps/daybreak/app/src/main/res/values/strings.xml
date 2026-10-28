@@ -13,6 +13,8 @@
     <string name="allow_exact">Allow exact alarms</string>
     <string name="enable_notifications">Enable notifications</string>
     <string name="allow_full_screen">Allow lock-screen alarms</string>
+    <string name="channel_access_help">The ringing notification channel is blocked or below High importance. Enable it at High importance so Android can present urgent alarms.</string>
+    <string name="open_alarm_channel">Review ringing notification channel</string>
     <string name="your_alarms">YOUR ALARMS</string>
     <plurals name="scheduled_count">
         <item quantity="one">%1$d scheduled alarm</item>
@@ -25,7 +27,7 @@
     <string name="status_completed">Completed / missed</string>
     <string name="alarm_status_date">%1$s · %2$s</string>
     <string name="delete_alarm">Delete</string>
-    <string name="home_footer">A small promise to yourself.\nOne-time alarms · 5-minute snooze · On-device only</string>
+    <string name="home_footer">A small promise to yourself.\nOne-time or weekly alarms · 5-minute snooze · On-device only</string>
     <string name="ringing_label">IT\'S TIME / %1$s</string>
     <string name="your_answer">Your answer</string>
     <string name="answer_dismiss">Answer &amp; start my day</string>
@@ -58,6 +60,8 @@
     <string name="channel_description">Open the challenge to snooze or dismiss</string>
     <string name="notification_title">Time to rise</string>
     <string name="notification_body">Open Daybreak and complete your challenge</string>
+    <string name="notification_loading">Preparing your alarm…</string>
+    <string name="notification_playback_failure">Alarm audio could not start. Open the challenge and check your alarm sound settings.</string>
     <string name="error_blank_label">Add an alarm name.</string>
     <string name="error_invalid_time">Enter time in 24-hour HH:mm format, for example 07:30.</string>
     <string name="error_unsupported_challenge">Unknown challenge. Restore a supported app version.</string>
@@ -76,12 +80,19 @@
     <string name="edit_alarm">Edit</string>
     <string name="edit_alarm_title">Edit your alarm</string>
     <string name="save_and_schedule">Save &amp; schedule</string>
-    <string name="edit_schedule_help">Saving schedules this alarm, including completed alarms. An unchanged future time keeps its scheduled date.</string>
+    <string name="edit_schedule_help">Saving schedules this alarm, including completed alarms. Unchanged time and repeat days keep a future occurrence; otherwise the next matching time is used.</string>
     <string name="alarm_updated">Alarm updated and scheduled.</string>
     <string name="edit_answer_help">Leave the answer blank to keep it when the question is unchanged. Changing the question requires a new answer. Never use passwords or sensitive information.</string>
     <string name="error_update_alarm">Could not update the alarm. Please try again.</string>
     <string name="error_stale_alarm">This alarm changed while you were editing. Close and reopen the editor.</string>
     <string name="error_edit_restore">Could not restore the previous alarm completely. Check alarm access and reopen the editor to review and reschedule it.</string>
     <string name="alarm_snoozed">Snoozed for 5 minutes.</string>
+    <string name="recurring_occurrence_dismissed">You\'re up. Your next recurring alarm stays scheduled.</string>
+    <string name="repeat_days_label">REPEAT</string>
+    <string name="repeat_once">Once only</string>
+    <string name="repeat_summary">Repeats: %1$s</string>
+    <string name="repeat_help">Choose weekdays to repeat in the phone\'s local time. No selected days means a one-time alarm.</string>
+    <string name="schedule_sync_pending">Some saved schedules still need to be applied. Check exact-alarm access and retry.</string>
+    <string name="retry_schedules">Retry saved schedules</string>
     <string name="alarm_dismissed">You\'re up. Make it a good day.</string>
 </resources>

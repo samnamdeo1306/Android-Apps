@@ -15,6 +15,7 @@ data class AlarmDraft(
     val challengeId: String = "sum.v1",
     val question: String = "",
     val answer: String = "",
+    val repeatDays: Set<java.time.DayOfWeek> = emptySet(),
 )
 
 data class AlarmEditorUiState(
@@ -40,14 +41,14 @@ class AlarmEditorViewModel(
     }
     fun edit(alarm: Alarm) {
         if (state.value.busy) return
-        if (activeId.value == alarm.id) {
+        if (activeId.value == alarm.id || alarm.phase == AlarmPhase.RINGING) {
             _state.update { it.copy(message = R.string.error_active_alarm) }
             return
         }
-        val time = Instant.ofEpochMilli(alarm.triggerAtMillis).atZone(ZoneId.systemDefault())
+        val time = alarm.repeat?.time ?: Instant.ofEpochMilli(alarm.triggerAtMillis).atZone(ZoneId.systemDefault())
             .toLocalTime().withSecond(0).withNano(0)
         _state.value = AlarmEditorUiState(visible = true, original = alarm,
-            draft = AlarmDraft(alarm.label, time.toString(), alarm.challengeId, alarm.question))
+            draft = AlarmDraft(alarm.label, time.toString(), alarm.challengeId, alarm.question, repeatDays = alarm.repeat?.days ?: emptySet()))
     }
     fun updateDraft(draft: AlarmDraft) {
         if (!state.value.busy) _state.update { it.copy(draft = draft) }
@@ -62,8 +63,8 @@ class AlarmEditorViewModel(
         _state.update { it.copy(busy = true, message = null) }
         viewModelScope.launch {
             try {
-                if (original == null) createAlarm.execute(draft.label, draft.time, draft.challengeId, draft.question, draft.answer)
-                else updateAlarm.execute(original, draft.label, draft.time, draft.challengeId, draft.question, draft.answer)
+                if (original == null) createAlarm.execute(draft.label, draft.time, draft.challengeId, draft.question, draft.answer, draft.repeatDays)
+                else updateAlarm.execute(original, draft.label, draft.time, draft.challengeId, draft.question, draft.answer, draft.repeatDays)
                 _state.update { it.copy(draft = AlarmDraft(), visible = false, original = null, saved = true,
                     message = if (original == null) R.string.alarm_created else R.string.alarm_updated) }
             } catch (error: CancellationException) { throw error }
