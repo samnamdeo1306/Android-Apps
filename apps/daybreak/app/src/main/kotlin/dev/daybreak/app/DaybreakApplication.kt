@@ -39,7 +39,10 @@ class DaybreakApplication : Application() {
     val screenViewModelFactory by lazy {
         viewModelFactory {
             initializer { AlarmListViewModel(repository, DeleteAlarm(repository, scheduler), activeId) }
-            initializer { CreateAlarmViewModel(CreateAlarm(repository, scheduler, challenges)) }
+            initializer {
+                AlarmEditorViewModel(CreateAlarm(repository, scheduler, challenges),
+                    dev.daybreak.domain.UpdateAlarm(repository, scheduler, challenges, { activeId.value }), activeId)
+            }
             initializer {
                 RingingViewModel(repository, challenges, CompleteAlarmChallenge(repository, scheduler), activeId,
                     AlarmPlayback { id ->

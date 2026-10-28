@@ -24,19 +24,23 @@
 - Baseline profiles and startup benchmarks after measuring a real performance problem.
 - Hilt, feature module extraction, and typed navigation only when app size or team needs make their tradeoffs worthwhile.
 
+## P3 — optional visual polish
+
+- Later todo: explore a Sinasamaki-style custom time dial (potentially ChromaDial) inside AlarmTimeField. Low priority, explicitly deferred by the maintainer on 2026-10-28; not a release blocker. Keep the current Material picker and prioritize editing, delivery reliability, sounds, and recurrence. Revisit only with capacity for precision, 12/24-hour behavior, keyboard fallback, accessibility, and dependency compatibility review. See ADR-19.
+
 ## What makes the interview project stronger
 
 Show a complete reliable vertical slice, an honest device test report, a small decision history, and a demonstration of adding one challenge without changing the scheduler. A long list of libraries or unfinished puzzle screens is less defensible than clear invariants and measured reliability.
 
 ## Planned usability and alarm features (2026-10-28)
 
-These are planned increments beyond the current one-time-alarm baseline, not implemented capabilities. ADR-16's screen-specific ViewModels are now implemented, giving the editor and settings clear state ownership. The default English localization foundation (ADR-18) is now implemented. Next: the proper time picker. Translations and visual pseudolocale/RTL acceptance remain follow-up work.
+These are planned increments beyond the current one-time-alarm baseline, not implemented capabilities. ADR-16's screen-specific ViewModels are now implemented, giving the editor and settings clear state ownership. The default English localization foundation (ADR-18) is now implemented. The proper time picker (ADR-19) is now implemented. Editing existing alarms is now implemented (ADR-20), with best-effort compensation; durable reconciliation remains P0. Next: full-screen and idle delivery hardening. Translations and visual pseudolocale/RTL acceptance remain follow-up work.
 
 | Order | Increment | Acceptance and dependencies |
 | --- | --- | --- |
 | Done (foundation) | String localization foundation | Move app-owned user-facing text to Android string/plural resources, including Compose labels, accessibility descriptions, validation feedback, challenge titles/generated prompts, notification text and channel descriptions. Use format arguments instead of concatenation; respect locale and system time format. Map typed domain failures and prompt data to localized text in the Android presentation layer, keeping domain free of Android resources. Preserve user-entered labels/questions verbatim and stable challenge IDs/answer normalization. Verify resource completeness, pseudolocales, RTL, and large fonts. Start with default English resources; additional translated languages are separate increments. |
-| 1 | Proper time picker | Material time picker as the primary input, system 12/24-hour preference, accessible keyboard input fallback; cancel leaves the draft unchanged. Share between create and edit. |
-| 2 | Edit existing alarms | Open a prefilled editor; save preserves alarm ID and replaces pending delivery; cancel changes nothing. Blank personal answer means retain the stored digest for an unchanged question; changing the question requires a new answer. Reject edits while that alarm is ringing. Include scheduling failure/reconciliation tests. |
+| Done (implementation) | Proper time picker | Material time picker as the primary input, system 12/24-hour preference, accessible keyboard input fallback; cancel leaves the draft unchanged. Share between create and edit. |
+| Done (implementation) | Edit existing alarms | Open a prefilled editor; save preserves alarm ID and replaces pending delivery; cancel changes nothing. Blank personal answer means retain the stored digest for an unchanged question; changing the question requires a new answer. Reject edits while that alarm is ringing. Scheduling failure/compensation tests included; durable reconciliation/crash-window tests remain P0. |
 | 3 | Full-screen and idle delivery hardening | Exercise existing full-screen notification path on locked/screen-off devices and during Doze; test permission denied and channel disabled paths. On unlocked devices accept Android's heads-up presentation. Keep challenge access through the notification and playback in the service. |
 | 4 | Settings and alarm sounds | Settings screen with a persisted default alarm sound, title, explicit preview/stop, and system alarm-tone selection. Preview stops on leaving the screen. First increment uses a global default resolved at ringing start; changing settings does not switch an already ringing alarm. Fall back to a known playable sound on missing/unreadable selection. Per-alarm overrides and imported audio are later options. |
 | 5 | Recurring alarms | Select weekdays plus once-only mode; show next occurrence. Persist recurrence rules separately from the next scheduled occurrence and a ringing/snoozed occurrence. Requires a Room migration and durable reconciliation before enabling. |

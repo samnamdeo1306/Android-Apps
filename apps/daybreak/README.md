@@ -7,9 +7,11 @@ A local-first Android alarm app that asks you to engage your mind before snoozin
 ## What the first increment does
 
 - Schedule multiple one-time alarms for the next occurrence of a local time.
+- Select time using a themed clock dial or keyboard input, following the system 12/24-hour preference.
 - Choose a personal question with an agreed answer, or a generated addition puzzle.
 - Complete the same challenge gate for **both** dismiss and five-minute snooze.
 - Store alarms in Room and observe changes through Kotlin Flow.
+- Edit saved alarms with a shared prefilled editor, retaining ID and unchanged personal answers.
 - Ring through a foreground service with an alarm notification and permitted full-screen intent.
 - Restore future alarms after reboot/update; skip alarms missed while powered off.
 - Present a calm navy, peach, and mint Material 3 Compose interface.
@@ -33,7 +35,7 @@ On a phone, grant exact-alarm access, notifications, and (where available) full-
 
 | Module | Responsibility |
 | --- | --- |
-| `core:domain` | Plain Kotlin models, repository/scheduler ports, challenge strategies, create/delete/completion use cases, unit tests |
+| `core:domain` | Plain Kotlin models, repository/scheduler ports, challenge strategies, create/update/delete/completion use cases, unit tests |
 | `core:data` | Room database, DAO, repository adapter, versioned schema |
 | `app` | Compose UI, screen-specific ViewModels, explicit dependency composition, Android alarm/notification/playback adapters |
 

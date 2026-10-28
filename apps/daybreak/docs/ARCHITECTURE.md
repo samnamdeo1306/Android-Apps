@@ -6,8 +6,8 @@ The app uses a small layered design with unidirectional UI state. The domain own
 
 ```mermaid
 flowchart TD
-    UI[Compose screens] --> VM[AlarmList / CreateAlarm / Ringing ViewModels]
-    VM --> CREATE[CreateAlarm / DeleteAlarm]
+    UI[Compose screens] --> VM[AlarmList / AlarmEditor / Ringing ViewModels]
+    VM --> CREATE[CreateAlarm / UpdateAlarm / DeleteAlarm]
     VM --> UC[CompleteAlarmChallenge]
     UC --> CS[ChallengeSession / Challenge strategy]
     UC --> RP[AlarmRepository port]
@@ -23,7 +23,7 @@ flowchart TD
     FLOW --> VM
 ```
 
-`DaybreakApplication` is the explicit composition root. It creates one Room repository, scheduler, challenge registry, and application coroutine scope. `AlarmListViewModel`, `CreateAlarmViewModel`, and `RingingViewModel` each expose one read-only StateFlow of immutable UI state and accept explicit commands. They are ordinary ViewModels with constructor dependencies, created by a small lifecycle ViewModel factory at the composition root. No ViewModel holds an Application, Context, Intent, or another ViewModel. The Activity owns the three screen models so their state survives rotation, including temporary creation drafts and the generated challenge; this is not process-death persistence. Repository writes are suspending Room DAO calls; Room executes database work off the main thread. StateFlow collection uses `collectAsStateWithLifecycle`.
+`DaybreakApplication` is the explicit composition root. It creates one Room repository, scheduler, challenge registry, and application coroutine scope. `AlarmListViewModel`, `AlarmEditorViewModel`, and `RingingViewModel` each expose one read-only StateFlow of immutable UI state and accept explicit commands. They are ordinary ViewModels with constructor dependencies, created by a small lifecycle ViewModel factory at the composition root. No ViewModel holds an Application, Context, Intent, or another ViewModel. The Activity owns the three screen models so their state survives rotation, including temporary creation drafts and the generated challenge; this is not process-death persistence. Repository writes are suspending Room DAO calls; Room executes database work off the main thread. StateFlow collection uses `collectAsStateWithLifecycle`.
 
 ## Why three modules
 
@@ -76,3 +76,13 @@ UI commands flow down; immutable state flows up. Creation success is a state fla
 Creation drafts live only in memory; closing or successfully saving clears personal answers. Drafts are lost on process death. An active but unavailable/unsupported challenge keeps the route in ringing mode, suppressing creation/list controls; no fallback bypass or playback stop occurs. A loading failure produces feedback without killing the active-ID collector, allowing a subsequent ringing session to load.
 
 ADR-18 now moves English copy into Android resources and maps typed domain failures to app resource IDs, without introducing Android dependencies into domain. Compose resolves message IDs at rendering time, with locale-sensitive snackbar effects. Generated prompt data lives in the ViewModel session; only its presentation changes with locale. The Room schema, service lifecycle, visual design, and scheduling reliability limits remain as before. No generic reducer, event bus, base ViewModel, or additional Gradle module is needed.
+
+## Alarm editor time selection
+
+AlarmTimeField is a presentation component accepting/emitting LocalTime. It formats the time card using the system clock preference and locale; the creation route stores only a confirmed value in the existing draft. Material picker state and the dial/keyboard mode are saveable presentation state; the AlarmEditorViewModel owns the confirmed draft. Cancel/back/outside dismissal never writes it. The picker has no repository, scheduling or challenge dependencies and is reused by the shared create/edit form. See ADR-19 for the Material/ChromaDial tradeoff and design references.
+
+## Editing existing alarms
+
+ADR-20 records the update semantics and failure windows. AlarmEditorViewModel owns one create/edit state, including the original Alarm snapshot and a plaintext-free prefilled draft. UpdateAlarm reads the current row, rejects a stale/missing or actively ringing record, and uses shared preparation with CreateAlarm. Persist the replacement configuration, then schedule the same ID. Exceptions/cancellation trigger best-effort row/registration compensation; an explicit localized recovery message distinguishes incomplete restoration. This is not durable reconciliation or a transaction spanning Room and AlarmManager.
+
+Save & schedule enables the alarm. Unchanged future enabled times preserve the original instant; changed/past/completed selections schedule their next local occurrence. A blank answer preserves the digest only for an unchanged personal question; strategy switches and question changes follow ADR-20. Playback and the common snooze/dismiss gate do not participate in ordinary editing. The modal's validation feedback remains visible while it is open. Domain rules remain JVM-testable and Android-independent; there is no schema migration or new dependency.

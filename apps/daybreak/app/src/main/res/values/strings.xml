@@ -34,7 +34,13 @@
     <string name="create_title">Your next fresh start</string>
     <string name="alarm_name">Alarm name</string>
     <string name="default_alarm_name">Morning ritual</string>
-    <string name="alarm_time_input">Time · 24-hour HH:mm</string>
+    <string name="alarm_time_label">ALARM TIME</string>
+    <string name="change_alarm_time">Tap to change time</string>
+    <string name="select_alarm_time">Choose your wake-up time</string>
+    <string name="use_time_keyboard">Use keyboard input</string>
+    <string name="use_time_dial">Use clock dial</string>
+    <string name="cancel">Cancel</string>
+    <string name="confirm_alarm_time">Set time</string>
     <string name="choose_challenge">CHOOSE YOUR CHALLENGE</string>
     <string name="agreed_question">Your agreed question</string>
     <string name="agreed_answer">Agreed answer</string>
@@ -67,6 +73,15 @@
     <string name="error_load_challenge">Could not load challenge. Please try again.</string>
     <string name="error_complete_alarm">Could not complete alarm. Your alarm is still ringing.</string>
     <string name="alarm_created">Alarm scheduled. Your next morning starts here.</string>
+    <string name="edit_alarm">Edit</string>
+    <string name="edit_alarm_title">Edit your alarm</string>
+    <string name="save_and_schedule">Save &amp; schedule</string>
+    <string name="edit_schedule_help">Saving schedules this alarm, including completed alarms. An unchanged future time keeps its scheduled date.</string>
+    <string name="alarm_updated">Alarm updated and scheduled.</string>
+    <string name="edit_answer_help">Leave the answer blank to keep it when the question is unchanged. Changing the question requires a new answer. Never use passwords or sensitive information.</string>
+    <string name="error_update_alarm">Could not update the alarm. Please try again.</string>
+    <string name="error_stale_alarm">This alarm changed while you were editing. Close and reopen the editor.</string>
+    <string name="error_edit_restore">Could not restore the previous alarm completely. Check alarm access and reopen the editor to review and reschedule it.</string>
     <string name="alarm_snoozed">Snoozed for 5 minutes.</string>
     <string name="alarm_dismissed">You\'re up. Make it a good day.</string>
 </resources>

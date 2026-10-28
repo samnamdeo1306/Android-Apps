@@ -19,6 +19,8 @@ fun Throwable.messageResource(@StringRes fallback: Int): Int = when (this) {
         AlarmFailureReason.EXACT_ACCESS_DENIED -> R.string.error_exact_access
         AlarmFailureReason.ACTIVE_CHANGED -> R.string.error_active_changed
         AlarmFailureReason.MISSING_ALARM -> R.string.error_missing_alarm
+        AlarmFailureReason.STALE_ALARM -> R.string.error_stale_alarm
+        AlarmFailureReason.EDIT_RESTORE_FAILED -> R.string.error_edit_restore
     }
     else -> fallback
 }

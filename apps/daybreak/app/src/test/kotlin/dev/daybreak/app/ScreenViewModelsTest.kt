@@ -26,7 +26,8 @@ class ScreenViewModelsTest {
     @Before fun setUp() { Dispatchers.setMain(dispatcher) }
     @After fun tearDown() { store.clear(); Dispatchers.resetMain() }
     private fun <T : ViewModel> keep(model: T): T { store.put("model${models++}", model); return model }
-    private fun create() = keep(CreateAlarmViewModel(CreateAlarm(repository, scheduler, ChallengeRegistry()))).apply {
+    private fun create() = keep(AlarmEditorViewModel(CreateAlarm(repository, scheduler, ChallengeRegistry()),
+        UpdateAlarm(repository, scheduler, ChallengeRegistry(), { active.value }), active)).apply {
         begin("Morning ritual")
     }
     private fun ringing() = keep(RingingViewModel(repository, ChallengeRegistry(),
@@ -41,10 +42,10 @@ class ScreenViewModelsTest {
         runCurrent()
         assertEquals(1, repository.saves)
         assertEquals(1, scheduler.schedules)
-        assertTrue(model.state.value.created)
+        assertTrue(model.state.value.saved)
         assertFalse(model.state.value.busy)
-        model.creationHandled()
-        assertFalse(model.state.value.created)
+        model.saveHandled()
+        assertFalse(model.state.value.saved)
     }
 
     @Test fun failedCreatePreservesDraftAndAllowsRetry() = runTest(dispatcher) {
@@ -53,14 +54,14 @@ class ScreenViewModelsTest {
         model.updateDraft(draft)
         scheduler.denied = true
         model.save(); runCurrent()
-        assertFalse(model.state.value.created)
+        assertFalse(model.state.value.saved)
         assertFalse(model.state.value.busy)
         assertNotNull(model.state.value.message)
         assertEquals(draft, model.state.value.draft)
         assertTrue(repository.rows.value.isEmpty())
         scheduler.denied = false
         model.save(); runCurrent()
-        assertTrue(model.state.value.created)
+        assertTrue(model.state.value.saved)
         assertEquals("", model.state.value.draft.answer)
     }
 
@@ -156,11 +157,12 @@ class ScreenViewModelsTest {
             override fun schedule(alarm: Alarm) { throw AlarmFailure(AlarmFailureReason.EXACT_ACCESS_DENIED) }
             override fun cancel(id: String) = Unit
         }
-        val model = keep(CreateAlarmViewModel(CreateAlarm(repository, denied, ChallengeRegistry())))
+        val model = keep(AlarmEditorViewModel(CreateAlarm(repository, denied, ChallengeRegistry()),
+            UpdateAlarm(repository, denied, ChallengeRegistry(), { active.value }), active))
         model.begin("Wake")
         model.save(); runCurrent()
         assertEquals(R.string.error_exact_access, model.state.value.message)
-        assertFalse(model.state.value.created)
+        assertFalse(model.state.value.saved)
         assertTrue(repository.rows.value.isEmpty())
     }
 
@@ -169,7 +171,75 @@ class ScreenViewModelsTest {
         repository.failSave = true
         model.save(); runCurrent()
         assertEquals(R.string.error_create_alarm, model.state.value.message)
-        assertFalse(model.state.value.created)
+        assertFalse(model.state.value.saved)
+    }
+
+    @Test fun editPrefillsWithoutRecoveringPlaintextAndCancelLeavesPersistenceAlone() = runTest(dispatcher) {
+        repository.rows.value = listOf(alarm)
+        val model = create()
+        model.edit(alarm)
+        assertTrue(model.state.value.visible)
+        assertEquals(alarm, model.state.value.original)
+        assertEquals(alarm.label, model.state.value.draft.label)
+        assertEquals(alarm.question, model.state.value.draft.question)
+        assertEquals("", model.state.value.draft.answer)
+        model.updateDraft(model.state.value.draft.copy(label = "Changed", answer = "private"))
+        model.close()
+        assertFalse(model.state.value.visible)
+        assertEquals("", model.state.value.draft.answer)
+        assertEquals(listOf(alarm), repository.rows.value)
+        assertEquals(0, repository.saves)
+        assertEquals(0, scheduler.schedules)
+    }
+
+    @Test fun editSaveGuardsDoubleTapPreservesIdAndClosesEditor() = runTest(dispatcher) {
+        repository.rows.value = listOf(alarm)
+        val model = create(); model.edit(alarm)
+        model.updateDraft(model.state.value.draft.copy(label = "Edited"))
+        model.save(); model.save(); runCurrent()
+        assertTrue(model.state.value.saved)
+        assertFalse(model.state.value.visible)
+        assertEquals(R.string.alarm_updated, model.state.value.message)
+        assertEquals("Edited", repository.rows.value.single().label)
+        assertEquals(alarm.id, repository.rows.value.single().id)
+        assertEquals(alarm.answerDigest, repository.rows.value.single().answerDigest)
+        assertEquals(1, scheduler.schedules)
+    }
+
+    @Test fun editFailureRetainsDraftAndHasNoSuccessState() = runTest(dispatcher) {
+        repository.rows.value = listOf(alarm)
+        val model = create(); model.edit(alarm)
+        val draft = model.state.value.draft.copy(question = "New?")
+        model.updateDraft(draft)
+        model.save(); runCurrent()
+        assertTrue(model.state.value.visible)
+        assertFalse(model.state.value.saved)
+        assertEquals(draft, model.state.value.draft)
+        assertEquals(R.string.error_question_answer, model.state.value.message)
+        assertEquals(listOf(alarm), repository.rows.value)
+    }
+
+    @Test fun alarmBecomingActiveAfterEditorOpenedIsRejectedAtSave() = runTest(dispatcher) {
+        repository.rows.value = listOf(alarm)
+        val model = create(); model.edit(alarm)
+        active.value = alarm.id
+        model.save(); runCurrent()
+        assertFalse(model.state.value.saved)
+        assertEquals(R.string.error_active_alarm, model.state.value.message)
+        assertEquals(0, repository.saves)
+        model.close(); model.edit(alarm)
+        assertFalse(model.state.value.visible)
+    }
+
+    @Test fun editorDoesNotOverwriteAnAlarmChangedSinceOpening() = runTest(dispatcher) {
+        repository.rows.value = listOf(alarm)
+        val model = create(); model.edit(alarm)
+        val changed = alarm.copy(label = "Another update")
+        repository.rows.value = listOf(changed)
+        model.save(); runCurrent()
+        assertEquals(R.string.error_stale_alarm, model.state.value.message)
+        assertEquals(listOf(changed), repository.rows.value)
+        assertFalse(model.state.value.saved)
     }
 
     private class Repository : AlarmRepository {

@@ -54,7 +54,7 @@ private val Mint = Color(0xFFB6E5D2)
 
 class MainActivity : ComponentActivity() {
     private val listModel: AlarmListViewModel by viewModels { graph.screenViewModelFactory }
-    private val createModel: CreateAlarmViewModel by viewModels { graph.screenViewModelFactory }
+    private val editorModel: AlarmEditorViewModel by viewModels { graph.screenViewModelFactory }
     private val ringingModel: RingingViewModel by viewModels { graph.screenViewModelFactory }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -78,13 +78,12 @@ class MainActivity : ComponentActivity() {
 
     @Composable private fun DaybreakScreen() {
         val listState by listModel.state.collectAsStateWithLifecycle()
-        val createState by createModel.state.collectAsStateWithLifecycle()
+        val editorState by editorModel.state.collectAsStateWithLifecycle()
         val ringingState by ringingModel.state.collectAsStateWithLifecycle()
         val alarms = listState.alarms
         val ringing = ringingState.ringing
         val active = ringingState.active
         val busy = listState.busy
-        var showCreate by rememberSaveable { mutableStateOf(false) }
         var permissionRevision by remember { mutableIntStateOf(0) }
         val lifecycle = LocalLifecycleOwner.current.lifecycle
         DisposableEffect(lifecycle) {
@@ -108,23 +107,23 @@ class MainActivity : ComponentActivity() {
         val defaultLabel = stringResource(R.string.default_alarm_name)
         val locale = LocalConfiguration.current.locales[0]
         val listMessage = listState.message?.let { stringResource(it) }
-        val createMessage = createState.message?.let { stringResource(it) }
+        val editorMessage = editorState.message?.let { stringResource(it) }
         val ringingMessage = ringingState.message?.let { stringResource(it) }
         LaunchedEffect(listState.message, listMessage) {
             listState.message?.let { snackbar.showSnackbar(requireNotNull(listMessage)); listModel.messageShown(it) }
         }
-        LaunchedEffect(createState.message, createMessage) {
-            createState.message?.let { snackbar.showSnackbar(requireNotNull(createMessage)); createModel.messageShown(it) }
+        LaunchedEffect(editorState.message, editorMessage) {
+            editorState.message?.let { snackbar.showSnackbar(requireNotNull(editorMessage)); editorModel.messageShown(it) }
         }
         LaunchedEffect(ringingState.message, ringingMessage) {
             ringingState.message?.let { snackbar.showSnackbar(requireNotNull(ringingMessage)); ringingModel.messageShown(it) }
         }
-        LaunchedEffect(createState.created) {
-            if (createState.created) { showCreate = false; createModel.creationHandled() }
+        LaunchedEffect(editorState.saved) {
+            if (editorState.saved) { editorModel.saveHandled() }
         }
         Scaffold(containerColor = Ink, snackbarHost = { SnackbarHost(snackbar) },
             floatingActionButton = {
-                if (!active) ExtendedFloatingActionButton(onClick = { createModel.begin(defaultLabel); showCreate = true },
+                if (!active) ExtendedFloatingActionButton(onClick = { editorModel.begin(defaultLabel) },
                     containerColor = Peach, contentColor = Ink) { Text(stringResource(R.string.new_alarm), fontWeight = FontWeight.Bold) }
             }) { padding ->
             LazyColumn(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF243447), Ink)))
@@ -190,9 +189,12 @@ class MainActivity : ComponentActivity() {
                                     stringResource(if (alarm.enabled) R.string.status_scheduled else R.string.status_completed),
                                     java.text.DateFormat.getDateInstance(java.text.DateFormat.MEDIUM, locale)
                                         .format(Date(alarm.triggerAtMillis))), color = Muted)
-                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                     Text(stringResource(challengeTitle(alarm.challengeId)),
                                         color = Mint, modifier = Modifier.padding(top = 14.dp))
+                                    TextButton(onClick = { editorModel.edit(alarm) }, enabled = !busy && !editorState.busy) {
+                                        Text(stringResource(R.string.edit_alarm))
+                                    }
                                     TextButton(onClick = { listModel.delete(alarm) }, enabled = !busy) { Text(stringResource(R.string.delete_alarm)) }
                                 }
                             }
@@ -205,8 +207,8 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
-        if (showCreate && !active) CreateAlarmDialog(createState, graph.challenges.options, exact,
-            createModel::updateDraft, createModel::save) { createModel.close(); showCreate = false }
+        if (editorState.visible && !active) AlarmEditorDialog(editorState, graph.challenges.options, exact,
+            editorModel::updateDraft, editorModel::save) { editorModel.close() }
     }
 }
 
@@ -228,8 +230,8 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-@Composable private fun CreateAlarmDialog(
-    state: CreateAlarmUiState,
+@Composable private fun AlarmEditorDialog(
+    state: AlarmEditorUiState,
     options: List<dev.daybreak.domain.Challenge>,
     exact: Boolean,
     update: (AlarmDraft) -> Unit,
@@ -243,11 +245,12 @@ class MainActivity : ComponentActivity() {
     val type = draft.challengeId
     val question = draft.question
     val answer = draft.answer
-    AlertDialog(onDismissRequest = { if (!busy) close() }, title = { Text(stringResource(R.string.create_title)) },
+    AlertDialog(onDismissRequest = { if (!busy) close() }, title = { Text(stringResource(if (state.original == null) R.string.create_title else R.string.edit_alarm_title)) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(label, { update(draft.copy(label = it)) }, label = { Text(stringResource(R.string.alarm_name)) }, singleLine = true)
-                OutlinedTextField(time, { update(draft.copy(time = it)) }, label = { Text(stringResource(R.string.alarm_time_input)) }, singleLine = true)
+                AlarmTimeField(java.time.LocalTime.parse(time), enabled = !busy,
+                    onTimeSelected = { update(draft.copy(time = it.toString())) })
                 Text(stringResource(R.string.choose_challenge), color = Mint, fontSize = 11.sp)
                 options.forEach { option ->
                     FilterChip(selected = type == option.id, onClick = { update(draft.copy(challengeId = option.id)) }, label = { Text(stringResource(challengeTitle(option.id))) })
@@ -256,13 +259,15 @@ class MainActivity : ComponentActivity() {
                     OutlinedTextField(question, { update(draft.copy(question = it)) }, label = { Text(stringResource(R.string.agreed_question)) })
                     OutlinedTextField(answer, { update(draft.copy(answer = it)) }, label = { Text(stringResource(R.string.agreed_answer)) }, singleLine = true,
                         visualTransformation = PasswordVisualTransformation())
-                    Text(stringResource(R.string.question_help), fontSize = 12.sp, color = Muted)
+                    Text(stringResource(if (state.original?.challengeId == "question.v1") R.string.edit_answer_help else R.string.question_help), fontSize = 12.sp, color = Muted)
                 } else Text(stringResource(R.string.puzzle_help), color = Muted)
+                if (state.original != null) Text(stringResource(R.string.edit_schedule_help), fontSize = 12.sp, color = Muted)
+                state.message?.let { Text(stringResource(it), color = MaterialTheme.colorScheme.error) }
                 if (!exact) Text(stringResource(R.string.exact_required_hint), color = Peach)
             }
         }, confirmButton = {
             TextButton(enabled = !busy && exact, onClick = {
                 save()
-            }) { Text(if (busy) stringResource(R.string.saving) else stringResource(R.string.schedule)) }
+            }) { Text(if (busy) stringResource(R.string.saving) else stringResource(if (state.original == null) R.string.schedule else R.string.save_and_schedule)) }
         }, dismissButton = { TextButton(onClick = close, enabled = !busy) { Text(stringResource(R.string.close)) } })
 }

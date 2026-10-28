@@ -49,3 +49,22 @@ Validation for the screen-specific MVVM increment: `:core:domain:test :app:testD
 - Updated ADR-18, architecture/extension guidance, roadmap and localization acceptance checklist. No schema or toolchain upgrade.
 
 Localization validation: 16 domain tests and 10 ViewModel tests passed (zero failures/errors/skips); debug APK assembly and lint succeeded. Lint reports dependency-update warnings only. Static resource-reference review found 66 resource entries and no missing references. Installed the debug build on the running Pixel 3a API 30 emulator and visually checked the English home screen (including system 12-hour display) and creation dialog; closed without scheduling an alarm. Expanded/RTL pseudolocale layouts, 200% fonts, live Android locale-switch behavior while ringing, and notification localization remain manual acceptance checks; human translations are not included.
+
+## 2026-10-28 — Time picker
+
+- Replaced the free-form time text field with a rounded, gradient time card and a Material 3 dial/keyboard dialog.
+- Follow the system 12/24-hour preference; confirm applies to the in-memory draft, while cancel/back/outside dismissal discards pending time edits.
+- Reusable LocalTime-based presentation component; no scheduling side effects, schema changes or new dependencies. Short/large-font displays start in keyboard mode; dialog content scrolls and actions wrap.
+- Reviewed Sinasamaki's ChromaDial dial/customization articles for visual inspiration; retained standard Material controls and documented the alpha dependency/maintenance tradeoff in ADR-19. Updated requirements, architecture and roadmap.
+
+Time-picker validation: `:core:domain:test :app:testDebugUnitTest :app:assembleDebug :app:lintDebug` passed (16 domain and 10 ViewModel tests, zero failures/errors/skips; domain results reused as up-to-date). Lint has dependency-update warnings only. API 30 emulator checks verified the 12-hour card/dial/input presentation, cancel preserving 7:00 AM after a pending edit, and keyboard confirmation updating the draft to 9:09 PM without scheduling. Remaining device checks are listed in TEST_PLAN.md; no full accessibility sign-off is claimed.
+
+## 2026-10-28 — Edit saved alarms
+
+- Added Edit actions and a shared AlarmEditorViewModel/dialog for new and existing alarms, reusing the time picker and localized validation.
+- Retain ID and unchanged personal-answer digest; changed questions require a new answer. Save & schedule enables the alarm; unchanged future enabled times preserve their scheduled instant.
+- Reject stale, missing and ringing edits. UpdateAlarm uses persist-then-schedule and best-effort compensation, including cancellation; incomplete restoration has explicit recovery feedback.
+- Shared domain preparation avoids duplicate create/edit rules. No schema migration, new dependency or challenge/playback ownership change.
+- ADR-20 documents rationale, alternatives, tested compensation and remaining concurrency/crash/reconciliation limits. The custom Sinasamaki-style dial remains low-priority P3 work.
+
+Editing validation: 31 domain tests + 15 ViewModel tests passed with zero failures/errors/skips; debug assembly and lint succeeded. Final lint has dependency-update warnings only. API 30 emulator review verified Edit entry, prefilled name/time/challenge and save/reschedule copy; closed without saving. On-device rescheduling/delivery, permission recovery, rotation and near-trigger concurrency remain in TEST_PLAN.md. Durable reconciliation remains unimplemented, explicitly documented in ADR-20.
