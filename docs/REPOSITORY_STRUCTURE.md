@@ -29,6 +29,10 @@ Use lowercase directory names with hyphens when needed. Give applications distin
 5. Add a sample-specific workflow under `.github/workflows/`. Scope its path filters to the sample and its workflow. Set shell working directory to the sample; artifact paths remain relative to the repository root.
 6. Add the sample to the root README catalog. Validate commands from the exact working directory documented.
 
+## Maintaining decisions
+
+Each sample's `docs/DECISIONS.md` is its living decision log. Update it whenever a significant design choice is made, in the same change, with rationale, alternatives, tradeoffs, and implementation status. Preserve changed decisions as superseded history. See [Daybreak's decision log](../apps/daybreak/docs/DECISIONS.md) for the initial decisions and the detailed MVVM record. Repository-wide decisions belong in root `docs/`. Contributor and agent guidance is in [AGENTS.md](../AGENTS.md).
+
 ## Cloud environment
 
 Toolchains and dependency caches may be shared outside the checkout under `/workspace/toolchains`. Application source, Gradle projects, and documents remain inside their sample. Use the existing task checkout; another worktree is unnecessary unless explicitly requested.
