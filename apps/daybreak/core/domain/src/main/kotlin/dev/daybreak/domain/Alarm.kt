@@ -31,12 +31,16 @@ interface AlarmScheduler {
 /** A challenge defines content and validation; it never schedules or stops an alarm. */
 interface Challenge {
     val id: String
-    val title: String
     fun create(alarm: Alarm): ChallengePrompt
     fun accepts(prompt: ChallengePrompt, input: String): Boolean
 }
 
-data class ChallengePrompt(val text: String, val expectedDigest: String, val salt: String)
+sealed interface PromptContent {
+    data class UserText(val text: String) : PromptContent
+    data class Addition(val left: Int, val right: Int) : PromptContent
+}
+
+data class ChallengePrompt(val content: PromptContent, val expectedDigest: String, val salt: String)
 
 fun answerDigest(answer: String, salt: String): String = MessageDigest.getInstance("SHA-256")
     .digest((salt + ":" + answer.trim().lowercase(Locale.ROOT)).toByteArray(Charsets.UTF_8))
@@ -44,8 +48,7 @@ fun answerDigest(answer: String, salt: String): String = MessageDigest.getInstan
 
 class QuestionChallenge : Challenge {
     override val id = "question.v1"
-    override val title = "Your question"
-    override fun create(alarm: Alarm) = ChallengePrompt(alarm.question, alarm.answerDigest, alarm.id)
+    override fun create(alarm: Alarm) = ChallengePrompt(PromptContent.UserText(alarm.question), alarm.answerDigest, alarm.id)
     override fun accepts(prompt: ChallengePrompt, input: String) =
         input.isNotBlank() && answerDigest(input, prompt.salt) == prompt.expectedDigest
 }
@@ -53,11 +56,10 @@ class QuestionChallenge : Challenge {
 /** Randomness is injectable so puzzle generation can be tested deterministically. */
 class SumChallenge(private val random: Random = Random.Default) : Challenge {
     override val id = "sum.v1"
-    override val title = "Number puzzle"
     override fun create(alarm: Alarm): ChallengePrompt {
         val left = random.nextInt(2, 20)
         val right = random.nextInt(2, 20)
-        return ChallengePrompt("What is $left + $right?", answerDigest("${left + right}", alarm.id), alarm.id)
+        return ChallengePrompt(PromptContent.Addition(left, right), answerDigest("${left + right}", alarm.id), alarm.id)
     }
     override fun accepts(prompt: ChallengePrompt, input: String) =
         input.trim().toIntOrNull()?.let { answerDigest(it.toString(), prompt.salt) == prompt.expectedDigest } ?: false

@@ -4,12 +4,13 @@ import android.Manifest
 import android.app.NotificationManager
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.net.Uri
+
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.view.WindowManager
 import androidx.core.net.toUri
+import androidx.activity.viewModels
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -38,11 +39,13 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
+
 import dev.daybreak.domain.AlarmAction
-import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
+import java.util.Date
+
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.platform.LocalConfiguration
 
 private val Ink = Color(0xFF101C2B)
 private val Muted = Color(0xFFABB8CB)
@@ -50,6 +53,9 @@ private val Peach = Color(0xFFFFB59A)
 private val Mint = Color(0xFFB6E5D2)
 
 class MainActivity : ComponentActivity() {
+    private val listModel: AlarmListViewModel by viewModels { graph.screenViewModelFactory }
+    private val createModel: CreateAlarmViewModel by viewModels { graph.screenViewModelFactory }
+    private val ringingModel: RingingViewModel by viewModels { graph.screenViewModelFactory }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         if (Build.VERSION.SDK_INT >= 27) {
@@ -70,11 +76,14 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    @Composable private fun DaybreakScreen(model: AlarmViewModel = viewModel()) {
-        val alarms by model.alarms.collectAsStateWithLifecycle()
-        val ringing by model.ringing.collectAsStateWithLifecycle()
-        val message by model.message.collectAsStateWithLifecycle()
-        val busy by model.busy.collectAsStateWithLifecycle()
+    @Composable private fun DaybreakScreen() {
+        val listState by listModel.state.collectAsStateWithLifecycle()
+        val createState by createModel.state.collectAsStateWithLifecycle()
+        val ringingState by ringingModel.state.collectAsStateWithLifecycle()
+        val alarms = listState.alarms
+        val ringing = ringingState.ringing
+        val active = ringingState.active
+        val busy = listState.busy
         var showCreate by rememberSaveable { mutableStateOf(false) }
         var permissionRevision by remember { mutableIntStateOf(0) }
         val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -96,137 +105,164 @@ class MainActivity : ComponentActivity() {
             Build.VERSION.SDK_INT < 34 || getSystemService(NotificationManager::class.java).canUseFullScreenIntent()
         }
         val snackbar = remember { SnackbarHostState() }
-        LaunchedEffect(message) {
-            message?.let { snackbar.showSnackbar(it); model.message.value = null }
+        val defaultLabel = stringResource(R.string.default_alarm_name)
+        val locale = LocalConfiguration.current.locales[0]
+        val listMessage = listState.message?.let { stringResource(it) }
+        val createMessage = createState.message?.let { stringResource(it) }
+        val ringingMessage = ringingState.message?.let { stringResource(it) }
+        LaunchedEffect(listState.message, listMessage) {
+            listState.message?.let { snackbar.showSnackbar(requireNotNull(listMessage)); listModel.messageShown(it) }
+        }
+        LaunchedEffect(createState.message, createMessage) {
+            createState.message?.let { snackbar.showSnackbar(requireNotNull(createMessage)); createModel.messageShown(it) }
+        }
+        LaunchedEffect(ringingState.message, ringingMessage) {
+            ringingState.message?.let { snackbar.showSnackbar(requireNotNull(ringingMessage)); ringingModel.messageShown(it) }
+        }
+        LaunchedEffect(createState.created) {
+            if (createState.created) { showCreate = false; createModel.creationHandled() }
         }
         Scaffold(containerColor = Ink, snackbarHost = { SnackbarHost(snackbar) },
             floatingActionButton = {
-                if (ringing == null) ExtendedFloatingActionButton(onClick = { showCreate = true },
-                    containerColor = Peach, contentColor = Ink) { Text("+  New alarm", fontWeight = FontWeight.Bold) }
+                if (!active) ExtendedFloatingActionButton(onClick = { createModel.begin(defaultLabel); showCreate = true },
+                    containerColor = Peach, contentColor = Ink) { Text(stringResource(R.string.new_alarm), fontWeight = FontWeight.Bold) }
             }) { padding ->
             LazyColumn(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF243447), Ink)))
                 .padding(padding), contentPadding = PaddingValues(24.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
                 item {
-                    Text("DAYBREAK   /   A MORE INTENTIONAL MORNING", color = Mint, fontSize = 10.sp,
+                    Text(stringResource(R.string.brand_tagline), color = Mint, fontSize = 10.sp,
                         letterSpacing = 1.sp, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(24.dp))
-                    Text(if (ringing == null) "Rise with\npurpose." else "A little focus.\nA fresh start.",
+                    Text(if (!active) stringResource(R.string.home_heading) else stringResource(R.string.ringing_heading),
                         fontSize = 44.sp, lineHeight = 48.sp, fontWeight = FontWeight.SemiBold)
                     Spacer(Modifier.height(12.dp))
-                    Text(if (ringing == null) "An alarm that wakes your mind, too." else "Complete your challenge to finish or rest a little longer.", color = Muted)
+                    Text(if (!active) stringResource(R.string.home_subtitle) else stringResource(R.string.ringing_subtitle), color = Muted)
                 }
-                if (ringing != null) {
-                    item { ChallengeCard(requireNotNull(ringing), busy, model::submit) }
+                if (active) {
+                    item {
+                        if (ringing != null) ChallengeCard(requireNotNull(ringing), ringingState.busy, ringingModel::submit)
+                        else Text(stringResource(R.string.challenge_loading))
+                    }
                 } else {
                     if (!exact || !notificationAllowed || !fullScreen) item {
                         Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF303A45))) {
                             Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Text("Give your morning a clear path", fontWeight = FontWeight.Bold)
-                                Text("Exact alarms are required to schedule. Notifications and full-screen access help you reach the challenge when your phone is locked.", color = Muted)
+                                Text(stringResource(R.string.permission_heading), fontWeight = FontWeight.Bold)
+                                Text(stringResource(R.string.permission_explanation), color = Muted)
                                 if (!exact && Build.VERSION.SDK_INT >= 31) TextButton(onClick = {
                                     startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
                                         "package:$packageName".toUri()))
-                                }) { Text("Allow exact alarms") }
+                                }) { Text(stringResource(R.string.allow_exact)) }
                                 if (!notificationAllowed) TextButton(onClick = {
                                     if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
                                         notifications.launch(Manifest.permission.POST_NOTIFICATIONS)
                                     else startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, packageName))
-                                }) { Text("Enable notifications") }
+                                }) { Text(stringResource(R.string.enable_notifications)) }
                                 if (!fullScreen && Build.VERSION.SDK_INT >= 34) TextButton(onClick = {
                                     startActivity(Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, "package:$packageName".toUri()))
-                                }) { Text("Allow lock-screen alarms") }
+                                }) { Text(stringResource(R.string.allow_full_screen)) }
                             }
                         }
                     }
                     item {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text("YOUR ALARMS", color = Muted, letterSpacing = 2.sp, fontSize = 12.sp)
-                            Text("${alarms.count { it.enabled }} scheduled", color = Mint, fontSize = 12.sp)
+                            Text(stringResource(R.string.your_alarms), color = Muted, letterSpacing = 2.sp, fontSize = 12.sp)
+                            Text(pluralStringResource(R.plurals.scheduled_count, alarms.count { it.enabled }, alarms.count { it.enabled }), color = Mint, fontSize = 12.sp)
                         }
                     }
                     if (alarms.isEmpty()) item {
                         Card(Modifier.fillMaxWidth()) {
                             Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                                Text("Make room for a good morning.", fontSize = 22.sp, fontWeight = FontWeight.Medium)
-                                Text("Set a time. Choose your question or a quick number puzzle. Both snooze and dismiss need an answer.", color = Muted)
-                                Text("01  Choose your time\n02  Pick a challenge\n03  Wake up with intention", lineHeight = 30.sp, color = Mint)
+                                Text(stringResource(R.string.empty_heading), fontSize = 22.sp, fontWeight = FontWeight.Medium)
+                                Text(stringResource(R.string.empty_explanation), color = Muted)
+                                Text(stringResource(R.string.empty_steps), lineHeight = 30.sp, color = Mint)
                             }
                         }
                     }
                     items(alarms, key = { it.id }) { alarm ->
                         Card(Modifier.fillMaxWidth()) {
                             Column(Modifier.padding(20.dp)) {
-                                Text(Instant.ofEpochMilli(alarm.triggerAtMillis).atZone(ZoneId.systemDefault())
-                                    .format(DateTimeFormatter.ofPattern("HH:mm")), fontSize = 42.sp, fontWeight = FontWeight.Light,
+                                Text(android.text.format.DateFormat.getTimeFormat(this@MainActivity).format(Date(alarm.triggerAtMillis)), fontSize = 42.sp, fontWeight = FontWeight.Light,
                                     color = if (alarm.enabled) Peach else Muted)
                                 Text(alarm.label, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
                                 Spacer(Modifier.height(8.dp))
-                                Text("${if (alarm.enabled) "Scheduled" else "Completed / missed"} · " +
-                                    Instant.ofEpochMilli(alarm.triggerAtMillis).atZone(ZoneId.systemDefault())
-                                        .format(DateTimeFormatter.ofPattern("EEE, d MMM")), color = Muted)
+                                Text(stringResource(R.string.alarm_status_date,
+                                    stringResource(if (alarm.enabled) R.string.status_scheduled else R.string.status_completed),
+                                    java.text.DateFormat.getDateInstance(java.text.DateFormat.MEDIUM, locale)
+                                        .format(Date(alarm.triggerAtMillis))), color = Muted)
                                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                    Text(model.options.find { it.id == alarm.challengeId }?.title ?: "Unsupported challenge",
+                                    Text(stringResource(challengeTitle(alarm.challengeId)),
                                         color = Mint, modifier = Modifier.padding(top = 14.dp))
-                                    TextButton(onClick = { model.delete(alarm) }, enabled = !busy) { Text("Delete") }
+                                    TextButton(onClick = { listModel.delete(alarm) }, enabled = !busy) { Text(stringResource(R.string.delete_alarm)) }
                                 }
                             }
                         }
                     }
                     item {
-                        Text("A small promise to yourself.\nOne-time alarms · 5-minute snooze · On-device only", color = Muted,
+                        Text(stringResource(R.string.home_footer), color = Muted,
                             fontSize = 12.sp, lineHeight = 20.sp, modifier = Modifier.padding(bottom = 90.dp))
                     }
                 }
             }
         }
-        if (showCreate && ringing == null) CreateAlarmDialog(model, busy, exact) { showCreate = false }
+        if (showCreate && !active) CreateAlarmDialog(createState, graph.challenges.options, exact,
+            createModel::updateDraft, createModel::save) { createModel.close(); showCreate = false }
     }
 }
 
 @Composable private fun ChallengeCard(current: RingingUi, busy: Boolean, submit: (AlarmAction, String) -> Unit) {
-    var answer by rememberSaveable(current.alarm.id, current.session.prompt.text) { mutableStateOf("") }
+    var answer by rememberSaveable(current.alarm.id, current.prompt) { mutableStateOf("") }
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
-            Text("IT'S TIME  /  ${current.alarm.label}", color = Mint, fontSize = 12.sp)
-            Text(current.session.prompt.text, fontSize = 26.sp, lineHeight = 32.sp, fontWeight = FontWeight.Medium)
-            OutlinedTextField(answer, { answer = it }, label = { Text("Your answer") }, singleLine = true,
+            Text(stringResource(R.string.ringing_label, current.alarm.label), color = Mint, fontSize = 12.sp)
+            Text(promptText(current.prompt.content), fontSize = 26.sp, lineHeight = 32.sp, fontWeight = FontWeight.Medium)
+            OutlinedTextField(answer, { answer = it }, label = { Text(stringResource(R.string.your_answer)) }, singleLine = true,
                 modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(keyboardType =
                     if (current.alarm.challengeId == "sum.v1") KeyboardType.Number else KeyboardType.Text))
             Button(onClick = { submit(AlarmAction.DISMISS, answer) }, enabled = !busy && answer.isNotBlank(),
-                modifier = Modifier.fillMaxWidth()) { Text("Answer & start my day") }
+                modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.answer_dismiss)) }
             OutlinedButton(onClick = { submit(AlarmAction.SNOOZE, answer) }, enabled = !busy && answer.isNotBlank(),
-                modifier = Modifier.fillMaxWidth()) { Text("Answer & snooze 5 min") }
-            Text("A wrong answer keeps the alarm ringing. Your phone's alarm volume controls the sound.", color = Muted, fontSize = 12.sp)
+                modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.answer_snooze)) }
+            Text(stringResource(R.string.answer_help), color = Muted, fontSize = 12.sp)
         }
     }
 }
 
-@Composable private fun CreateAlarmDialog(model: AlarmViewModel, busy: Boolean, exact: Boolean, close: () -> Unit) {
-    var label by rememberSaveable { mutableStateOf("Morning ritual") }
-    var time by rememberSaveable { mutableStateOf("07:00") }
-    var type by rememberSaveable { mutableStateOf("sum.v1") }
-    var question by rememberSaveable { mutableStateOf("") }
-    var answer by remember { mutableStateOf("") }
-    AlertDialog(onDismissRequest = { if (!busy) close() }, title = { Text("Your next fresh start") },
+@Composable private fun CreateAlarmDialog(
+    state: CreateAlarmUiState,
+    options: List<dev.daybreak.domain.Challenge>,
+    exact: Boolean,
+    update: (AlarmDraft) -> Unit,
+    save: () -> Unit,
+    close: () -> Unit,
+) {
+    val draft = state.draft
+    val busy = state.busy
+    val label = draft.label
+    val time = draft.time
+    val type = draft.challengeId
+    val question = draft.question
+    val answer = draft.answer
+    AlertDialog(onDismissRequest = { if (!busy) close() }, title = { Text(stringResource(R.string.create_title)) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(label, { label = it }, label = { Text("Alarm name") }, singleLine = true)
-                OutlinedTextField(time, { time = it }, label = { Text("Time · 24-hour HH:mm") }, singleLine = true)
-                Text("CHOOSE YOUR CHALLENGE", color = Mint, fontSize = 11.sp)
-                model.options.forEach { option ->
-                    FilterChip(selected = type == option.id, onClick = { type = option.id }, label = { Text(option.title) })
+                OutlinedTextField(label, { update(draft.copy(label = it)) }, label = { Text(stringResource(R.string.alarm_name)) }, singleLine = true)
+                OutlinedTextField(time, { update(draft.copy(time = it)) }, label = { Text(stringResource(R.string.alarm_time_input)) }, singleLine = true)
+                Text(stringResource(R.string.choose_challenge), color = Mint, fontSize = 11.sp)
+                options.forEach { option ->
+                    FilterChip(selected = type == option.id, onClick = { update(draft.copy(challengeId = option.id)) }, label = { Text(stringResource(challengeTitle(option.id))) })
                 }
                 if (type == "question.v1") {
-                    OutlinedTextField(question, { question = it }, label = { Text("Your agreed question") })
-                    OutlinedTextField(answer, { answer = it }, label = { Text("Agreed answer") }, singleLine = true,
+                    OutlinedTextField(question, { update(draft.copy(question = it)) }, label = { Text(stringResource(R.string.agreed_question)) })
+                    OutlinedTextField(answer, { update(draft.copy(answer = it)) }, label = { Text(stringResource(R.string.agreed_answer)) }, singleLine = true,
                         visualTransformation = PasswordVisualTransformation())
-                    Text("Answers ignore letter case and outer spaces. Use a memorable answer, never a password or sensitive information.", fontSize = 12.sp, color = Muted)
-                } else Text("Solve a fresh addition puzzle each time the alarm rings.", color = Muted)
-                if (!exact) Text("Enable exact alarms on the home screen before saving.", color = Peach)
+                    Text(stringResource(R.string.question_help), fontSize = 12.sp, color = Muted)
+                } else Text(stringResource(R.string.puzzle_help), color = Muted)
+                if (!exact) Text(stringResource(R.string.exact_required_hint), color = Peach)
             }
         }, confirmButton = {
             TextButton(enabled = !busy && exact, onClick = {
-                model.create(label, time, type, question, answer, close)
-            }) { Text(if (busy) "Saving…" else "Schedule") }
-        }, dismissButton = { TextButton(onClick = close, enabled = !busy) { Text("Close") } })
+                save()
+            }) { Text(if (busy) stringResource(R.string.saving) else stringResource(R.string.schedule)) }
+        }, dismissButton = { TextButton(onClick = close, enabled = !busy) { Text(stringResource(R.string.close)) } })
 }

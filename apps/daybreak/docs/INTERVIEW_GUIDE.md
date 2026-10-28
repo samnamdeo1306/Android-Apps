@@ -4,7 +4,7 @@
 
 1. **Problem:** sleepy taps defeat normal alarms; add an intentional challenge for both exit actions.
 2. **Invariant:** wrong answers cannot reach scheduling/cancel/persistence side effects. Show `CompleteAlarmChallenge` and its tests.
-3. **Flow:** Compose submits an intent to the ViewModel; the use case verifies; ports apply the action; Android service stops only after success.
+3. **Flow:** Compose sends a command to its screen-specific ViewModel, which publishes immutable state; the use case verifies; ports apply the action; Android service stops only after success.
 4. **Boundaries:** pure Kotlin domain, Room adapter, Android UI/delivery. Explain why only three modules.
 5. **Extensibility:** show the registry extension test; distinguish text challenges from future camera/motion UI requirements.
 6. **Android reality:** explain exact access, foreground sound, full-screen permission, reboot restoration, process death and force-stop limits.

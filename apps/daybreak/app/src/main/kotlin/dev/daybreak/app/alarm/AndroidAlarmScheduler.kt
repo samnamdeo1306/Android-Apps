@@ -18,10 +18,13 @@ class AndroidAlarmScheduler(private val context: Context) : AlarmScheduler {
         Intent(context, AlarmReceiver::class.java).setData("daybreak://alarm/$id".toUri())
             .putExtra("alarmId", id), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
     override fun schedule(alarm: Alarm) {
-        check(canSchedule()) { "Allow exact alarms in system settings first." }
+        if (!canSchedule()) throw dev.daybreak.domain.AlarmFailure(dev.daybreak.domain.AlarmFailureReason.EXACT_ACCESS_DENIED)
         val show = PendingIntent.getActivity(context, 0, Intent(context, MainActivity::class.java),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-        manager.setAlarmClock(AlarmManager.AlarmClockInfo(alarm.triggerAtMillis, show), operation(alarm.id))
+        try { manager.setAlarmClock(AlarmManager.AlarmClockInfo(alarm.triggerAtMillis, show), operation(alarm.id)) }
+        catch (_: SecurityException) {
+            throw dev.daybreak.domain.AlarmFailure(dev.daybreak.domain.AlarmFailureReason.EXACT_ACCESS_DENIED)
+        }
     }
     override fun cancel(id: String) = manager.cancel(operation(id))
 }

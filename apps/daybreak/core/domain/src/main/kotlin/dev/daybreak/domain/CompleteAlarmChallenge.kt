@@ -9,7 +9,7 @@ class CompleteAlarmChallenge(
     private val clock: Clock = Clock.systemUTC(),
 ) {
     suspend fun execute(alarm: Alarm, session: ChallengeSession, action: AlarmAction, answer: String) {
-        require(session.verify(answer)) { "Not quite. Try again — your alarm is still ringing." }
+        if (!session.verify(answer)) throw AlarmFailure(AlarmFailureReason.WRONG_ANSWER)
         val changed = when (action) {
             AlarmAction.SNOOZE -> alarm.copy(triggerAtMillis = clock.millis() + 5 * 60_000, enabled = true)
             AlarmAction.DISMISS -> alarm.copy(enabled = false)

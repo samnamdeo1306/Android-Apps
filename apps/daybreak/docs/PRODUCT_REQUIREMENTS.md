@@ -53,3 +53,11 @@ The initial overlap policy defers a newly delivered second alarm by one minute w
 ## Success and release gate
 
 Development success: assemble debug APK, pass real domain tests, run Android lint, and review docs. Product release additionally needs the physical-device acceptance matrix, reliable sound/error recovery, Room integration tests, durable scheduling reconciliation, accessibility review, and Play policy review. No analytics are added merely to measure a portfolio app; record manual test outcomes instead.
+
+## Planned scope after 0.1.0
+
+Resource-based string localization (ADR-18) now has a default English foundation. The remaining requested features are a proper time picker, edit flow, weekday recurrence, verified full-screen/idle delivery, and settings for alarm sounds. See ROADMAP.md for sequencing, acceptance criteria, and the proposed recurrence policy, and ADR-17 for rationale and tradeoffs. These features remain planned; the scope and acceptance table above describe the currently implemented baseline.
+
+## Planned increment sequence
+
+The accepted product direction remains a small, local-first interview sample with a shared challenge gate and extensible strategies. ADR-16 screen-specific MVVM and the ADR-18 default English resource foundation are implemented. Next implement the time picker, editing, idle/full-screen delivery hardening, sound settings, and recurrence in ROADMAP.md. New challenge types stay behind the registry and shared completion gate; feature work must retain both action-gate tests and updated design/validation records.

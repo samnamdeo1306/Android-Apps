@@ -8,6 +8,7 @@ import android.media.RingtoneManager
 import android.os.IBinder
 import android.os.PowerManager
 import androidx.core.app.NotificationCompat
+import dev.daybreak.app.R
 import dev.daybreak.app.MainActivity
 import dev.daybreak.app.graph
 import kotlinx.coroutines.*
@@ -22,12 +23,12 @@ class RingingService : Service() {
             Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         getSystemService(NotificationManager::class.java).createNotificationChannel(
-            NotificationChannel("ringing", "Ringing alarms", NotificationManager.IMPORTANCE_HIGH).apply {
-                description = "Open the challenge to snooze or dismiss"; setSound(null, null)
+            NotificationChannel("ringing", getString(R.string.channel_name), NotificationManager.IMPORTANCE_HIGH).apply {
+                description = getString(R.string.channel_description); setSound(null, null)
             })
         startForeground(7, NotificationCompat.Builder(this, "ringing")
-            .setSmallIcon(android.R.drawable.ic_lock_idle_alarm).setContentTitle("Time to rise")
-            .setContentText("Open Daybreak and complete your challenge")
+            .setSmallIcon(android.R.drawable.ic_lock_idle_alarm).setContentTitle(getString(R.string.notification_title))
+            .setContentText(getString(R.string.notification_body))
             .setCategory(NotificationCompat.CATEGORY_ALARM).setPriority(NotificationCompat.PRIORITY_MAX)
             .setOngoing(true).setContentIntent(open).setFullScreenIntent(open, true).build())
         val id = intent?.getStringExtra("alarmId") ?: graph.activeId.value

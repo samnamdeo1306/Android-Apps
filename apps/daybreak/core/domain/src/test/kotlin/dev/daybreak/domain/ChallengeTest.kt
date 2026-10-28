@@ -19,8 +19,8 @@ class ChallengeTest {
     @Test fun puzzleRequiresCorrectNumericAnswer() {
         val challenge = SumChallenge(Random(42))
         val prompt = challenge.create(alarm)
-        val numbers = Regex("\\d+").findAll(prompt.text).map { it.value.toInt() }.toList()
-        val answer = numbers.sum()
+        val operands = prompt.content as PromptContent.Addition
+        val answer = operands.left + operands.right
         assertTrue(challenge.accepts(prompt, answer.toString()))
         assertFalse(challenge.accepts(prompt, (answer + 1).toString()))
         assertFalse(challenge.accepts(prompt, "not a number"))
@@ -28,8 +28,7 @@ class ChallengeTest {
     @Test fun registryCanAddStrategyWithoutChangingSession() {
         val custom = object : Challenge {
             override val id = "custom.v1"
-            override val title = "Custom"
-            override fun create(alarm: Alarm) = ChallengePrompt("Type ready", "", "")
+            override fun create(alarm: Alarm) = ChallengePrompt(PromptContent.UserText("Type ready"), "", "")
             override fun accepts(prompt: ChallengePrompt, input: String) = input == "ready"
         }
         val registry = ChallengeRegistry(listOf(QuestionChallenge(), SumChallenge(), custom))
@@ -42,5 +41,30 @@ class ChallengeTest {
     }
     @Test fun answersAreSaltedPerAlarm() {
         assertNotEquals(answerDigest("Library", "alarm-1"), answerDigest("Library", "alarm-2"))
+    }
+
+    @Test fun localeChangeKeepsPuzzleSessionAndAcceptsLocalizedDigits() {
+        val challenge = SumChallenge(Random(42))
+        val session = ChallengeSession(challenge, challenge.create(alarm))
+        val operands = session.prompt.content as PromptContent.Addition
+        val original = java.util.Locale.getDefault()
+        try {
+            java.util.Locale.setDefault(java.util.Locale.forLanguageTag("ar"))
+            val localized = java.text.NumberFormat.getIntegerInstance().format(operands.left + operands.right)
+            assertTrue(session.verify(localized))
+            assertTrue(session.verify((operands.left + operands.right).toString()))
+            assertEquals(operands, session.prompt.content)
+        } finally { java.util.Locale.setDefault(original) }
+    }
+
+    @Test fun personalQuestionAndAnswerNormalizationDoNotFollowDisplayLocale() {
+        val original = java.util.Locale.getDefault()
+        val personal = alarm.copy(question = "İstanbul?", answerDigest = answerDigest("LIBRARY", alarm.id))
+        val session = ChallengeSession(QuestionChallenge(), QuestionChallenge().create(personal))
+        try {
+            java.util.Locale.setDefault(java.util.Locale.forLanguageTag("tr"))
+            assertEquals(PromptContent.UserText("İstanbul?"), session.prompt.content)
+            assertTrue(session.verify(" library "))
+        } finally { java.util.Locale.setDefault(original) }
     }
 }

@@ -13,6 +13,7 @@ android {
         versionCode = 1
         versionName = "0.1.0"
     }
+    buildTypes { getByName("debug") { isPseudoLocalesEnabled = true } }
     buildFeatures { compose = true }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_21; targetCompatibility = JavaVersion.VERSION_21 }
 }
@@ -31,4 +32,6 @@ dependencies {
     implementation(libs.lifecycle.runtime)
     implementation(libs.lifecycle.viewmodel)
     implementation(libs.coroutines.android)
+    testImplementation(libs.junit)
+    testImplementation(libs.coroutines.test)
 }

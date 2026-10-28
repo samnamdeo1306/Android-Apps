@@ -21,7 +21,7 @@ Name, palette, addition puzzle, five-minute snooze, and one-time scheduling are 
 Use Android Studio with JDK 21, Android SDK platform 36 and build tools 36.0.0. Set your SDK location using Android Studio's ignored `local.properties` or `ANDROID_HOME`.
 
 ```sh
-./gradlew :core:domain:test :app:assembleDebug :app:lintDebug
+./gradlew :core:domain:test :app:testDebugUnitTest :app:assembleDebug :app:lintDebug
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
@@ -33,9 +33,9 @@ On a phone, grant exact-alarm access, notifications, and (where available) full-
 
 | Module | Responsibility |
 | --- | --- |
-| `core:domain` | Plain Kotlin models, repository/scheduler ports, challenge strategies, completion use case, unit tests |
+| `core:domain` | Plain Kotlin models, repository/scheduler ports, challenge strategies, create/delete/completion use cases, unit tests |
 | `core:data` | Room database, DAO, repository adapter, versioned schema |
-| `app` | Compose UI, ViewModel, explicit dependency composition, Android alarm/notification/playback adapters |
+| `app` | Compose UI, screen-specific ViewModels, explicit dependency composition, Android alarm/notification/playback adapters |
 
 Dependency direction: `app → data → domain` and `app → domain`. Domain does not depend on Android. We intentionally avoid a module per screen, a generic base ViewModel, and a DI framework until they solve a demonstrated problem.
 

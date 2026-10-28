@@ -27,3 +27,22 @@
 ## What makes the interview project stronger
 
 Show a complete reliable vertical slice, an honest device test report, a small decision history, and a demonstration of adding one challenge without changing the scheduler. A long list of libraries or unfinished puzzle screens is less defensible than clear invariants and measured reliability.
+
+## Planned usability and alarm features (2026-10-28)
+
+These are planned increments beyond the current one-time-alarm baseline, not implemented capabilities. ADR-16's screen-specific ViewModels are now implemented, giving the editor and settings clear state ownership. The default English localization foundation (ADR-18) is now implemented. Next: the proper time picker. Translations and visual pseudolocale/RTL acceptance remain follow-up work.
+
+| Order | Increment | Acceptance and dependencies |
+| --- | --- | --- |
+| Done (foundation) | String localization foundation | Move app-owned user-facing text to Android string/plural resources, including Compose labels, accessibility descriptions, validation feedback, challenge titles/generated prompts, notification text and channel descriptions. Use format arguments instead of concatenation; respect locale and system time format. Map typed domain failures and prompt data to localized text in the Android presentation layer, keeping domain free of Android resources. Preserve user-entered labels/questions verbatim and stable challenge IDs/answer normalization. Verify resource completeness, pseudolocales, RTL, and large fonts. Start with default English resources; additional translated languages are separate increments. |
+| 1 | Proper time picker | Material time picker as the primary input, system 12/24-hour preference, accessible keyboard input fallback; cancel leaves the draft unchanged. Share between create and edit. |
+| 2 | Edit existing alarms | Open a prefilled editor; save preserves alarm ID and replaces pending delivery; cancel changes nothing. Blank personal answer means retain the stored digest for an unchanged question; changing the question requires a new answer. Reject edits while that alarm is ringing. Include scheduling failure/reconciliation tests. |
+| 3 | Full-screen and idle delivery hardening | Exercise existing full-screen notification path on locked/screen-off devices and during Doze; test permission denied and channel disabled paths. On unlocked devices accept Android's heads-up presentation. Keep challenge access through the notification and playback in the service. |
+| 4 | Settings and alarm sounds | Settings screen with a persisted default alarm sound, title, explicit preview/stop, and system alarm-tone selection. Preview stops on leaving the screen. First increment uses a global default resolved at ringing start; changing settings does not switch an already ringing alarm. Fall back to a known playable sound on missing/unreadable selection. Per-alarm overrides and imported audio are later options. |
+| 5 | Recurring alarms | Select weekdays plus once-only mode; show next occurrence. Persist recurrence rules separately from the next scheduled occurrence and a ringing/snoozed occurrence. Requires a Room migration and durable reconciliation before enabling. |
+
+### Recurrence policy proposal — not yet accepted
+
+Use local wall-clock time and selected weekdays in the device's current time zone; recompute after zone/time changes and reboot. In a DST gap use the next valid local time; in an overlap ring once using the earlier offset. Snooze belongs to the active occurrence and does not shift the weekly rule. Dismiss completes that occurrence and keeps the rule enabled. Skip missed occurrences rather than replaying a backlog. Test a zone change, spring gap, autumn overlap, midnight snooze, and a snooze overlapping the next occurrence before accepting this policy.
+
+Compute and register one next exact occurrence with setAlarmClock rather than using an inexact repeating OS alarm. Keep the existing absolute-instant behavior for one-time alarms until an explicit product decision changes it.

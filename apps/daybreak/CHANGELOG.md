@@ -22,3 +22,30 @@ Cloud validation: 9 domain tests passed (0 failures, errors, or skipped tests); 
 ### Known limitations
 
 One-time alarms, fixed five-minute snooze, no editing/recurrence, best-effort overlap handling, no durable session/scheduler reconciliation, no robust audio failure recovery, and no release signing/store deployment. This is an interview prototype, not a production alarm guarantee. See the operations guide and roadmap.
+
+## 2026-10-28 — MVVM refactor, first increment
+
+- Extracted CreateAlarm and DeleteAlarm domain use cases; creation has an injectable Clock and preserves scheduling-denial compensation.
+- Exposed ViewModel flows read-only; snackbar acknowledgement now sends a command. Guard commands before coroutine launch.
+- Recorded the accepted MVVM/UDF direction and remaining screen-specific ViewModel work in ADR-16.
+- Local validation using JBR 21: 14 domain tests passed, zero failures/errors/skips; debug APK assembly and lint succeeded. Device behavior was not retested in this increment.
+
+## 2026-10-28 — Screen-specific MVVM increment
+
+- Replaced the application-aware AlarmViewModel with constructor-injected list, creation, and ringing ViewModels, each exposing cohesive read-only UI state.
+- Creation success now flows through acknowledged state; drafts and private challenge sessions survive rotation in memory. Personal creation answers clear on close/save.
+- Added an AlarmPlayback adapter; the foreground service still owns audio and both actions retain the shared completion gate.
+- Kept active-but-unavailable challenges in ringing mode, preventing ordinary list/create controls from appearing while sound continues.
+- Added JVM ViewModel behavior tests and updated architecture, ADR-16, product sequencing, test plan, and interview guide. Localization (ADR-18) remains the next increment; no Room schema or toolchain version change.
+
+Validation for the screen-specific MVVM increment: `:core:domain:test :app:testDebugUnitTest :app:assembleDebug :app:lintDebug` succeeded with JBR 21. Reports contain 14 domain tests and 8 ViewModel tests, zero failures/errors/skips. Domain tasks reused up-to-date results; the new ViewModel suite ran in this build. Debug APK assembly and lint passed. Physical-device rotation, playback, idle delivery, and lock-screen presentation were not rerun in this increment.
+
+## 2026-10-28 — String localization foundation
+
+- Moved app-owned UI, feedback, challenge, notification/channel and manifest text into default English string/plural resources.
+- Replaced raw exception feedback with typed domain failures mapped to Android presentation resources; domain stays independent of Android.
+- Generated addition prompts now hold operands; rendering translates wording/numerals without recreating the challenge session. Personal questions and stable IDs remain unchanged.
+- Added locale-aware date/time display, pluralized alarm counts, and debug pseudolocales. Time input stays HH:mm until the picker increment.
+- Updated ADR-18, architecture/extension guidance, roadmap and localization acceptance checklist. No schema or toolchain upgrade.
+
+Localization validation: 16 domain tests and 10 ViewModel tests passed (zero failures/errors/skips); debug APK assembly and lint succeeded. Lint reports dependency-update warnings only. Static resource-reference review found 66 resource entries and no missing references. Installed the debug build on the running Pixel 3a API 30 emulator and visually checked the English home screen (including system 12-hour display) and creation dialog; closed without scheduling an alarm. Expanded/RTL pseudolocale layouts, 200% fonts, live Android locale-switch behavior while ringing, and notification localization remain manual acceptance checks; human translations are not included.
