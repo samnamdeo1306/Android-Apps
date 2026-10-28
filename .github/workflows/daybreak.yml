@@ -1,0 +1,39 @@
+name: Daybreak development checks
+on:
+  push:
+    paths:
+      - 'apps/daybreak/**'
+      - '.github/workflows/daybreak.yml'
+  pull_request:
+    paths:
+      - 'apps/daybreak/**'
+      - '.github/workflows/daybreak.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/daybreak
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Install Android platform
+        run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
+      - name: Unit tests, APK, and lint
+        run: ./gradlew :core:domain:test :app:assembleDebug :app:lintDebug
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: daybreak-development-reports
+          path: |
+            apps/daybreak/core/domain/build/reports/tests/
+            apps/daybreak/app/build/reports/lint-results-debug.*
+            apps/daybreak/app/build/outputs/apk/debug/*.apk
