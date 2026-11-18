@@ -7,24 +7,26 @@ A collection of independent Android sample applications for learning, experiment
 | Sample | Purpose | Stack | Documentation |
 | --- | --- | --- | --- |
 | [Daybreak](apps/daybreak/) | Alarm app with question/puzzle challenges for snooze and dismiss | Kotlin, Compose, Room, coroutines, Flow | [Project overview](apps/daybreak/README.md) · [PRD](apps/daybreak/docs/PRODUCT_REQUIREMENTS.md) · [Architecture](apps/daybreak/docs/ARCHITECTURE.md) |
+| [NotesMaker](apps/notesmaker/) | Turns recorded or imported lectures into on-device transcripts and structured notes (planning) | Kotlin, Compose (planned) | [Project overview](apps/notesmaker/README.md) · [PRD](apps/notesmaker/docs/PRODUCT_REQUIREMENTS.md) · [Decisions](apps/notesmaker/docs/DECISIONS.md) |
 
 ## Repository layout
 
 ```text
 Android-Apps/
 ├── apps/
-│   └── daybreak/                # Independent Android Studio / Gradle project
-│       ├── app/                 # Compose UI and Android integration
-│       ├── core/
-│       │   ├── domain/          # Daybreak business rules and JVM tests
-│       │   └── data/            # Daybreak Room persistence
-│       ├── docs/               # PRD, architecture, decisions, testing, roadmap
-│       ├── gradle/             # Sample-owned wrapper and version catalog
-│       ├── gradlew
-│       ├── settings.gradle.kts
-│       ├── build.gradle.kts
-│       ├── README.md
-│       └── CHANGELOG.md
+│   ├── daybreak/                # Independent Android Studio / Gradle project
+│   │   ├── app/                 # Compose UI and Android integration
+│   │   ├── core/
+│   │   │   ├── domain/          # Daybreak business rules and JVM tests
+│   │   │   └── data/            # Daybreak Room persistence
+│   │   ├── docs/               # PRD, architecture, decisions, testing, roadmap
+│   │   ├── gradle/             # Sample-owned wrapper and version catalog
+│   │   ├── gradlew
+│   │   ├── settings.gradle.kts
+│   │   ├── build.gradle.kts
+│   │   ├── README.md
+│   │   └── CHANGELOG.md
+│   └── notesmaker/              # Planning: requirements and decisions only
 ├── docs/                       # Repository-wide conventions
 ├── .github/workflows/          # Sample-specific CI workflows
 └── README.md                   # Sample catalog and entry point
