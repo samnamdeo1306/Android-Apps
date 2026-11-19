@@ -1,8 +1,8 @@
 # High-level design — NotesMaker
 
-Status: **Draft v0.2 (2026-11-19)**. Design only; no code exists yet.
+Status: **Draft v0.3 (2026-11-19)**. Design only; no code exists yet.
 Inputs: [product requirements](PRODUCT_REQUIREMENTS.md) (FR/NFR IDs) and [decision log](DECISIONS.md) (ADR-01 to ADR-09). New decisions made in this document are ADR-10 to ADR-18; ADR-19 sets the benchmark device tiers.
-Next: the low-level design (LLD) fixes class signatures, database schema, threading details and the internal API contracts. Where this document names an interface, the name is a working name and its exact signature belongs to the LLD.
+Detailed by: the [low-level design](LOW_LEVEL_DESIGN.md) (schema, state machines, threading, native build, prompts, manifest, test plan) and the [internal API design](API_DESIGN.md) (exact Kotlin contracts), with ADR-20 to ADR-30. Where this document and those differ, the more detailed document wins and the difference is listed in Section 12.
 
 ## 1. Purpose and scope
 
@@ -506,16 +506,18 @@ Consequences for the design:
 | R-6 | LLM output does not follow the structure | Notes fail and fall back to basic too often | Structured output where the API supports it, strict validation, one retry, prompts tested on spike transcripts |
 | OQ-3 | Reference device for benchmarks (PRD) | NFR-10 to NFR-13 targets | **Resolved (ADR-19):** emulator baseline, Galaxy A-series for mid-range and Pixel 8 Pro for high-end targets. |
 | R-7 | Emulator speed misleads: it depends on the host and on x86_64 builds of whisper.cpp | Wrong conclusions about performance | Speed pass/fail only on tiers M and H; emulator numbers used for trends between builds on the same host (ADR-19) |
-| OQ-6 | whisper.cpp source pinning: git submodule, CMake `FetchContent` or vendored copy | Build reproducibility and CI time | Decide in the LLD |
-| OQ-7 | HTTP client for model download: OkHttp or `HttpURLConnection` | One dependency | Decide in the LLD |
+| OQ-6 | whisper.cpp source pinning: git submodule, CMake `FetchContent` or vendored copy | Build reproducibility and CI time | **Resolved (ADR-24):** `FetchContent` with a pinned release archive and SHA-256 |
+| OQ-7 | HTTP client for model download: OkHttp or `HttpURLConnection` | One dependency | **Resolved (ADR-25):** `HttpURLConnection` behind `HttpFileFetcher` |
 
-## 12. What the LLD will cover
+## 12. Low-level design and refinements
 
-- Exact Kotlin signatures for every port, use case and stage (the internal API design).
-- Room schema with tables, keys, indices and the first exported schema.
-- Recording state machine (idle, recording, paused, interrupted, stopping) with transitions per API level.
-- Processing state machine for a session, including cancellation and retry edge cases.
-- Prompt templates and the structured output schema for notes.
-- whisper.cpp build setup, JNI surface and threading.
-- Notification, permission and foreground service manifest details per API level.
-- Test plan mapping every M and S requirement to tests (PRD Section 13).
+The items this section listed for the LLD are now covered by the [low-level design](LOW_LEVEL_DESIGN.md) and the [internal API design](API_DESIGN.md). They refine this document in a few places:
+
+| HLD item | Refinement | Record |
+| --- | --- | --- |
+| `StageOutcome.Deferred` (Section 6.3) | Dropped; the pipeline never waits for the foreground, as ADR-15 already decided | ADR-22 |
+| Status updates | Every status change is a compare-and-set transition, so cancel and completion cannot both win | ADR-22 |
+| Transcription engine contract | Engines receive the audio file and a resume position and emit committed segments; the stage checkpoints them | ADR-21 |
+| `Capability` (Section 5.1) | Adds `NeedsDownload` for system-managed models such as Gemini Nano | API design 5.1 |
+| Recording interruptions (Section 6.1) | Audio focus is not requested; calls and microphone silencing are detected through audio mode and recording callbacks. After an interruption, recording stays paused until the user resumes | ADR-26 |
+| Voice activity detection (Section 6.4) | Energy-based detector first; whisper.cpp VAD compared in the spike | ADR-28 |
