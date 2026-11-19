@@ -2,7 +2,7 @@
 
 This is NotesMaker's living decision log, following the repository conventions in [AGENTS.md](../../../AGENTS.md). Each record has a stable ID, date, status, context, decision, alternatives with tradeoffs, consequences, and implementation status. When a decision changes, add a new record that supersedes the old one and link both, rather than editing away the original reasoning.
 
-ADR-01 to ADR-09 were made while writing the [product requirements](PRODUCT_REQUIREMENTS.md) and set product direction and constraints. ADR-10 to ADR-18 were made while writing the [high-level design](HIGH_LEVEL_DESIGN.md) and set structure, dependency injection, processing, recording, persistence and navigation. The LLD will add records for detailed choices such as the native build and HTTP client.
+ADR-01 to ADR-09 were made while writing the [product requirements](PRODUCT_REQUIREMENTS.md) and set product direction and constraints. ADR-10 to ADR-18 were made while writing the [high-level design](HIGH_LEVEL_DESIGN.md) and set structure, dependency injection, processing, recording, persistence and navigation. ADR-19 set the benchmark device tiers. ADR-20 to ADR-30 were made while writing the [low-level design](LOW_LEVEL_DESIGN.md) and [internal API design](API_DESIGN.md) and set error handling, engine and pipeline contracts, the schema, the native build, the download client, recording logic, prompts, voice activity detection, screen boundaries and test doubles.
 
 Statuses: **Proposed** (awaiting maintainer review), **Accepted**, **Superseded by ADR-nn**. Facts about third-party libraries were checked against their documentation on 2026-11-18. Performance figures marked "to verify" will be measured in the transcription spike (ADR-02 follow-up) before the HLD fixes them.
 
@@ -27,6 +27,17 @@ Statuses: **Proposed** (awaiting maintainer review), **Accepted**, **Superseded 
 | [ADR-17](#adr-17--navigation-3-with-an-adaptive-list-detail-layout) | Navigation 3 with adaptive list-detail | Back stack as state; tablet layouts | Newer library, fewer examples |
 | [ADR-18](#adr-18--sort-titles-in-memory-with-a-locale-aware-collator-no-paging-in-01) | Locale-aware title sort in memory; no Paging | Correct accented sorting; simple | Loads all list rows at once |
 | [ADR-19](#adr-19--benchmark-device-tiers-emulator-baseline-galaxy-a-series-and-pixel-8-pro) | Emulator baseline; Galaxy A-series and Pixel 8 Pro for speed targets | Fast daily iteration; realistic targets on real phones | Emulator speed is not representative |
+| [ADR-20](#adr-20--expected-failures-are-typed-values-exceptions-are-for-bugs) | Typed `Outcome` values for expected failures | Compiler-checked failure handling (NFR-23) | Some mapping boilerplate |
+| [ADR-21](#adr-21--transcription-engines-receive-the-file-and-emit-committed-segments) | Engines take the file and emit committed segments | Fits whisper.cpp and ML Kit; domain owns checkpoints | Each engine handles resume |
+| [ADR-22](#adr-22--session-status-changes-are-compare-and-set-transitions-from-one-table) | Status changes are compare-and-set transitions | Cancel/complete races resolved in the database | Callers handle "not applied" |
+| [ADR-23](#adr-23--room-schema-normalized-notes-tables-string-enums-composite-child-keys) | Normalized notes tables, string enums, `(session_id, idx)` keys | Idempotent stages, safe migrations | JSON columns not searchable |
+| [ADR-24](#adr-24--build-whispercpp-from-a-pinned-release-archive-with-cmake-fetchcontent) | whisper.cpp via CMake FetchContent, pinned by hash | Reproducible, no submodule in a shared repo | First build needs network |
+| [ADR-25](#adr-25--download-models-with-httpurlconnection-behind-a-small-interface) | `HttpURLConnection` for model download | No runtime dependency for one call site | Verbose API |
+| [ADR-26](#adr-26--recording-logic-is-a-pure-reducer-the-service-only-performs-effects) | Recording as a pure reducer plus effects | Hardest flow testable on the JVM | Logic split across two files |
+| [ADR-27](#adr-27--llm-notes-use-versioned-prompt-templates-and-json-output-validated-by-one-validator) | Versioned prompts, JSON output, one validator | Robust structure; comparable prompt versions | Strictness causes some fallbacks |
+| [ADR-28](#adr-28--energy-based-voice-activity-detection-first-whispercpp-vad-evaluated-in-the-spike) | Energy VAD first; whisper.cpp VAD in the spike | Works before the spike, no extra model | May miss quiet speech |
+| [ADR-29](#adr-29--screens-call-use-cases-for-every-write-feature-modules-expose-only-entries-and-navigator-interfaces) | Writes via use cases; features expose entries and navigators | Rules stay in the domain; features independent | A few small classes |
+| [ADR-30](#adr-30--shared-fakes-and-contract-suites-in-testfixtures-no-mocking-library) | Shared fakes and contract suites in `testFixtures` | Faithful doubles, one place | Fakes need upkeep |
 
 ---
 
@@ -622,6 +633,328 @@ Peak memory under 1.5 GB applies to every tier.
 - Speed regressions may go unnoticed between real-device runs. Mitigated by tracking emulator trends on the same host.
 - "Galaxy A-series" covers a range of chips. The exact model tested is recorded with each result, and targets are revisited if the phone used is much older or newer than the A3x/A5x class.
 - Whether the Pixel 8 Pro supports the ML Kit GenAI Prompt API must be checked against the current device list; if it does not, the H tier only tests speed and the LLM path stays on fakes.
+
+---
+
+## ADR-20 — Expected failures are typed values; exceptions are for bugs
+
+- **Date:** 2026-11-19
+- **Status:** Proposed
+- **Implementation:** Not started. [API design](API_DESIGN.md) Section 1.3.
+
+### Context
+
+NFR-23 requires every engine failure to reach the user as a message with a recovery action, never as a crash. The HLD (Section 9.4) said adapters translate technology exceptions into a domain failure type, but not what the type looks like or how it travels.
+
+### Decision
+
+1. Ports return a small sealed `Outcome<T, E>` (Success or Failure) when the caller must handle a known failure. Failure types are sealed hierarchies per area: `ProcessingFailure`, `CaptureFailure`, `LanguageModelFailure`, `InstallFailure`.
+2. Adapters catch technology exceptions at the port boundary. No Android or library exception type appears in a domain signature.
+3. `CancellationException` is always rethrown. A domain helper `runCatchingCancellable` replaces `runCatching`, which is disallowed by a lint rule.
+4. Unexpected exceptions inside the pipeline become `ProcessingFailure.Unknown` and never crash the worker.
+5. Each `ProcessingFailure` has a stable `code` stored in the database.
+
+### Alternatives considered
+
+| Alternative | Assessment |
+| --- | --- |
+| Kotlin's `Result<T>` | Built in, but the error type is always `Throwable`, so callers cannot get an exhaustive `when` over known failures, and `runCatching` swallows `CancellationException`. |
+| Exceptions everywhere (custom exception hierarchy) | Idiomatic for Java-style code and less wrapping. But the compiler does not force callers to handle them, which is exactly what NFR-23 needs. |
+| Arrow's `Either` | Rich and well tested, but a large functional library for a handful of uses, and an extra concept for a learning project focused on Android. |
+
+### Tradeoffs accepted
+
+Some `map` and `flatMap` boilerplate in use cases. Two error styles coexist (values and exceptions), so the rule "expected failure → value" must be applied consistently in review.
+
+---
+
+## ADR-21 — Transcription engines receive the file and emit committed segments
+
+- **Date:** 2026-11-19
+- **Status:** Proposed
+- **Implementation:** Not started. [API design](API_DESIGN.md) Section 5.2.
+
+### Context
+
+ADR-13 checkpoints transcription per window so a crash loses little work. The checkpoint must be written by the domain (the `Transcribe` stage), but engines consume audio differently: whisper.cpp takes PCM windows, while ML Kit Speech Recognition (the planned second engine, ADR-02) takes a file or its own audio stream.
+
+### Decision
+
+`TranscriptionEngine.transcribe(audio: AudioFile, request)` returns a `Flow<TranscriptionEvent>`. The request carries `resumeFromMs` and the tail of already-committed text. The engine emits `Committed(segments, untilMs)` whenever a part of the audio is final, `Progress`, and at most one terminal `Failed`. The stage persists each `Committed` event together with the checkpoint in one transaction. A contract test suite checks ordering, non-overlap, monotonic `untilMs` and correct resume.
+
+### Alternatives considered
+
+| Alternative | Assessment |
+| --- | --- |
+| The stage decodes PCM windows and calls `engine.transcribe(window)` | Simplest for whisper.cpp and puts all looping in the domain. But it forces every engine to accept 30-second PCM windows, which fits ML Kit and cloud engines poorly, and fixes window boundaries in the domain even though cutting a word at a boundary is an engine-specific problem. |
+| `suspend fun transcribe(file): Transcript` for the whole file | Simplest contract. No checkpointing inside a long file, which ADR-13 rejected. |
+| Callbacks (`onSegment`, `onProgress`) | Same information as a `Flow`, but loses structured cancellation and backpressure. |
+
+### Tradeoffs accepted
+
+Each engine handles resuming from a position itself. The whisper engine needs a decoder that can start at any position, which `AudioDecoder` provides. Engines are slightly more complex in exchange for a contract that fits every planned engine.
+
+---
+
+## ADR-22 — Session status changes are compare-and-set transitions from one table
+
+- **Date:** 2026-11-19
+- **Status:** Proposed
+- **Implementation:** Not started. [LLD](LOW_LEVEL_DESIGN.md) Section 5.1.
+
+### Context
+
+Several actors change a session's status at the same time: the worker (start, complete, fail), the user (cancel, retry, regenerate), start-up recovery (requeue) and the model installer (requeue after install). A cancel arriving while the worker finishes must not end as `Ready`. The HLD sketched a `StageOutcome.Deferred` that no stage uses.
+
+### Decision
+
+1. The allowed transitions are listed once in a domain `SessionStateMachine`.
+2. The only way to change status is `SessionRepository.transition(id, expectedStatuses, change)`, implemented as one SQL `UPDATE ... WHERE id = ? AND status IN (...)` that reports whether it applied. Callers act on the result.
+3. `StageOutcome` has only `Completed` and `Failed`. `Deferred` is dropped, since ADR-15 already decided the pipeline never waits for the foreground. Adding it back later is a Plug-in API change with its own ADR.
+4. Regenerating notes reuses the same pipeline with a `PipelineTrigger`, rather than a second code path.
+
+### Alternatives considered
+
+| Alternative | Assessment |
+| --- | --- |
+| Plain `setStatus(id, status)` and a `Mutex` in the app | Works inside one process, but not across start-up recovery and the worker after process death, and it is easy to forget a lock. The database is already the single source of truth (ADR-13). |
+| Optimistic locking with a version column | Also correct and more general, but every update needs the version read first. The status set is the only thing that conflicts, so checking it directly is simpler. |
+| A state machine library | Adds a dependency for about a dozen transitions that fit in one table. |
+
+### Tradeoffs accepted
+
+Callers must handle "transition did not apply", which is a little more code at every call site. That is the point: the race becomes visible.
+
+---
+
+## ADR-23 — Room schema: normalized notes tables, string enums, composite child keys
+
+- **Date:** 2026-11-19
+- **Status:** Proposed
+- **Implementation:** Not started. [LLD](LOW_LEVEL_DESIGN.md) Section 3.
+
+### Context
+
+ADR-16 chose structured notes stored in normalized tables. NFR-21 requires idempotent stages and NFR-22 safe migrations. The sessions list must load quickly with 1,000 rows (NFR-15).
+
+### Decision
+
+- Tables `sessions`, `transcripts` (one row per session, holding the checkpoint and a `revision`), `transcript_segments`, `notes`, `note_sections`, `highlights`. Children cascade on session delete.
+- Session IDs are UUID strings. Child tables use `(session_id, idx)` primary keys.
+- Enums and IDs are stored as stable string names, never ordinals.
+- The summary and each section's points are JSON arrays in a text column, because they are never queried alone.
+- The list query selects only list columns.
+- `notes.transcript_revision` links notes to the transcript they were built from.
+
+### Alternatives considered
+
+| Alternative | Assessment |
+| --- | --- |
+| Store notes as one JSON document per session | Fewer tables and simpler writes. But per-item edit flags (FR-65) and seeking by time are clumsier, and schema changes inside the JSON are invisible to Room's migration checks. |
+| A separate table for section points | Fully normalized, but more joins and code for data that is always loaded with its section. |
+| Auto-increment integer session IDs | Smaller and faster indexes. But the recording service must create the ID before the row exists in some flows (file paths), and UUIDs never collide across a future export or import of sessions. |
+| Store enums as ordinals | Smaller, but reordering an enum silently corrupts data. |
+
+### Tradeoffs accepted
+
+JSON columns need a `TypeConverter` and cannot be searched in SQL; full-text search over notes (FR-55 stretch) would need an FTS table fed from them. String enums cost a few bytes per row.
+
+---
+
+## ADR-24 — Build whisper.cpp from a pinned release archive with CMake FetchContent
+
+- **Date:** 2026-11-19
+- **Status:** Proposed
+- **Implementation:** Not started. Resolves HLD open question OQ-6. [LLD](LOW_LEVEL_DESIGN.md) Section 1.3.
+
+### Context
+
+`:engine:whisper` compiles whisper.cpp from source for `arm64-v8a` and `x86_64` (ADR-19). The source must be pinned for reproducible builds, and the repository holds several independent samples.
+
+### Decision
+
+Use CMake `FetchContent` with the URL of a tagged whisper.cpp release archive and its SHA-256 (`URL_HASH`). The version and hash live in `libs.versions.toml` and are passed to CMake by Gradle. CI caches the download. An `arm64-v8a` variant built for ARMv8.2 with dot-product and FP16 instructions is loaded only on CPUs that support them.
+
+### Alternatives considered
+
+| Alternative | Assessment |
+| --- | --- |
+| Git submodule | Common and pinned by commit, but submodules are repository-wide: every clone of the samples repository must handle it, `git clone` without `--recursive` gives a confusing build failure, and Daybreak's CI would fetch it too. |
+| Vendored copy of the source in the repository | Fully offline and reviewable. Adds tens of MB of third-party code to the repository, and upgrades produce huge diffs. |
+| A prebuilt AAR from a third party | Fastest to start, but loses the NDK and JNI learning goal (ADR-02), and the build flags and version are outside our control. |
+
+### Tradeoffs accepted
+
+The first build needs network access to GitHub. A checksum mismatch (for example if a tag were moved) fails the build, which is intended. Two native library variants double the native build time.
+
+---
+
+## ADR-25 — Download models with `HttpURLConnection` behind a small interface
+
+- **Date:** 2026-11-19
+- **Status:** Proposed
+- **Implementation:** Not started. Resolves HLD open question OQ-7. [API design](API_DESIGN.md) Section 10, [LLD](LOW_LEVEL_DESIGN.md) Section 5.7.
+
+### Context
+
+The only network use in 0.1 is downloading speech models: a handful of large files over HTTPS, with resume through range requests (FR-33, NFR-31).
+
+### Decision
+
+Use the platform's `HttpURLConnection` inside a `HttpFileFetcher` interface in `:core:processing`. Tests run against OkHttp's `MockWebServer` (a test-only dependency), covering 200, 206, 416, 404 and checksum mismatch.
+
+### Alternatives considered
+
+| Alternative | Assessment |
+| --- | --- |
+| OkHttp | The de facto Android HTTP client, with a nicer API, connection pooling and interceptors. None of that matters for a few sequential downloads, and it adds a runtime dependency (with Okio) for one call site. |
+| Android `DownloadManager` | System-managed, survives app death, handles resume. But it writes to locations and shows notifications on its own terms, gives less control over checksum-before-install, and behaves differently across manufacturers. |
+| Ktor client | Kotlin-first and multiplatform-friendly, but the largest dependency of the options for the smallest use. |
+
+### Tradeoffs accepted
+
+`HttpURLConnection` is verbose and has quirks (redirect handling, error streams), contained in one class. If cloud engines arrive in 0.3 and need a richer client, this decision is revisited and the interface makes the swap local.
+
+---
+
+## ADR-26 — Recording logic is a pure reducer; the service only performs effects
+
+- **Date:** 2026-11-19
+- **Status:** Proposed
+- **Implementation:** Not started. [LLD](LOW_LEVEL_DESIGN.md) Section 4.
+
+### Context
+
+Recording has the most edge cases in the app: pause, resume, phone calls, another app taking the microphone, low storage, the 3-hour cap, stop, discard, and failures in remuxing. ADR-10 named the Capture flow as the likely place for an MVI-style reducer.
+
+### Decision
+
+`RecordingMachine` in `:core:domain` is a pure function `reduce(state, event) -> (state, effects)`. `RecordingService` turns Android signals into events and executes the returned effects (open the microphone, stop feeding the encoder, remux, update the notification). After an interruption ends, the machine goes to `Paused`, not back to `Recording`; the user resumes. Audio focus is not requested; phone calls and microphone silencing are detected through audio mode and recording callbacks.
+
+### Alternatives considered
+
+| Alternative | Assessment |
+| --- | --- |
+| State handled directly in the service with flags | Less code at first, but the logic can only be tested on a device, and flag combinations (paused and interrupted and low storage) are where bugs hide. |
+| MVI for every screen | Consistent, but most screens only observe a `Flow`; ADR-10 rejected that boilerplate. The reducer is used where the state machine is real. |
+| Resume automatically after a call | Fewer taps, but could record a private conversation; pausing is the safer default. |
+
+### Tradeoffs accepted
+
+Two places to read to understand recording (reducer and service). The effect list must stay in sync with what the service can do, which the compiler checks through a sealed type.
+
+---
+
+## ADR-27 — LLM notes use versioned prompt templates and JSON output validated by one validator
+
+- **Date:** 2026-11-19
+- **Status:** Proposed
+- **Implementation:** Not started. Detail for ADR-16. [LLD](LOW_LEVEL_DESIGN.md) Section 7.
+
+### Context
+
+ADR-16 decided that LLM-backed generators share one chunk-then-combine implementation with prompts owned by the domain. HLD risk R-6 is that model output does not follow the structure.
+
+### Decision
+
+1. Prompts are Kotlin string templates in versioned objects (`NotesPromptsV1`); the version is stored with the notes.
+2. Map and reduce steps request JSON with a schema. The schema is passed to the backend when it supports structured output and described in the prompt otherwise. Times are `mm:ss` strings, matching the `[mm:ss]` markers in the transcript.
+3. A lenient parser (kotlinx.serialization, unknown fields ignored, code fences stripped) and one `NotesValidator` for every generator, including the basic one. A failed chunk is retried once, then the stage falls back to the next generator.
+
+### Alternatives considered
+
+| Alternative | Assessment |
+| --- | --- |
+| Prompts as Android string resources or asset files | Editable without recompiling and translatable, but the domain is pure Kotlin (NFR-64) and prompts are logic, not UI copy. Translation of prompts is not wanted; the model is told the output language instead. |
+| Free text with headings, parsed with regular expressions | Works with any model, but fragile, and timestamps would be guessed. |
+| Times as seconds (integers) | Easier to parse, but models copy the `[mm:ss]` markers they see more reliably than they convert units. |
+
+### Tradeoffs accepted
+
+Some valid notes are rejected by strict validation and fall back to basic notes. The prompt text is in code, so tuning a prompt needs a build.
+
+---
+
+## ADR-28 — Energy-based voice activity detection first; whisper.cpp VAD evaluated in the spike
+
+- **Date:** 2026-11-19
+- **Status:** Proposed. To be confirmed or superseded after the transcription spike.
+- **Implementation:** Not started. [LLD](LOW_LEVEL_DESIGN.md) Section 6.3.
+
+### Context
+
+Whisper models can invent text on silence, and skipping silent windows saves time. The HLD named whisper.cpp's built-in VAD as the first candidate and an energy threshold as the fallback, with the choice left to the LLD after the spike.
+
+### Decision
+
+Define a `SpeechDetector` interface inside `:engine:whisper` (not a domain port). Ship an adaptive energy detector as the default so the engine works before the spike. Measure the whisper.cpp built-in VAD (Silero) against it on the lecture clips across tiers E, M and H, and switch the binding if it wins on word error rate and time.
+
+### Alternatives considered
+
+| Alternative | Assessment |
+| --- | --- |
+| whisper.cpp VAD from the start | Likely better accuracy, but needs a second model file to download and verify, and its cost on mid-range phones is unknown. |
+| No VAD | Simplest; wastes time on silence and risks invented text in long lectures with pauses. |
+| A domain-level `SpeechDetector` port | Would let other engines share it, but no other planned engine needs it (ML Kit does its own). Kept inside the engine per NFR-66. |
+
+### Tradeoffs accepted
+
+The energy detector can misclassify quiet speech in a noisy room as silence. Its thresholds are tuned on the spike clips.
+
+---
+
+## ADR-29 — Screens call use cases for every write; feature modules expose only entries and navigator interfaces
+
+- **Date:** 2026-11-19
+- **Status:** Proposed
+- **Implementation:** Not started. [API design](API_DESIGN.md) Sections 8 and 9.
+
+### Context
+
+ADR-10 said use cases exist only where they hold logic or coordinate ports, to avoid pass-through classes. HLD rule 3 keeps feature modules away from adapters, and rule 2 keeps features independent.
+
+### Decision
+
+1. ViewModels perform every write through a use case, and read through `Observe*` use cases. They never call repository write methods directly. All 0.1 writes have some logic (validation, title source, status transitions, file cleanup), so this adds no empty pass-throughs.
+2. A feature module's public surface is its Navigation 3 entry builder and a navigator interface (for example `SessionsNavigator`). Everything else is `internal`. `:app` implements the navigator interfaces with the back stack.
+
+### Alternatives considered
+
+| Alternative | Assessment |
+| --- | --- |
+| ViewModels use repositories directly for simple reads and writes | Fewer classes, but business rules (rename sets the title source, delete removes files) would drift into ViewModels. |
+| Navigation through route types shared from a common module | Simple, but each feature then knows other features' routes. A navigator interface keeps the dependency pointing at `:app`. |
+
+### Tradeoffs accepted
+
+A few small use cases and one interface per feature. Navigation callbacks are slightly more ceremony than calling `backStack.add(...)` in a screen.
+
+---
+
+## ADR-30 — Shared fakes and contract suites in `testFixtures`; no mocking library
+
+- **Date:** 2026-11-19
+- **Status:** Proposed
+- **Implementation:** Not started. [API design](API_DESIGN.md) Section 11, [LLD](LOW_LEVEL_DESIGN.md) Section 11.
+
+### Context
+
+NFR-71 requires a contract test suite per engine kind. Use cases, ViewModels and workers need test doubles for about fifteen ports.
+
+### Decision
+
+`:core:domain` publishes a `testFixtures` source set with abstract contract suites (`TranscriptionEngineContract`, `NoteGeneratorContract`, `LanguageModelContract`, `NotesExporterContract`, `PipelineStageContract`) and in-memory fakes for every port (`FakeSessionRepository`, `FakeTranscriptionEngine`, `FakeLanguageModel`, `FakeClock`). Other modules use them with `testImplementation(testFixtures(project(":core:domain")))`. No mocking library is added.
+
+### Alternatives considered
+
+| Alternative | Assessment |
+| --- | --- |
+| MockK in every module | Quick to write and flexible. But mocks restate implementation details, break on refactors, and do not check that the double behaves like the real thing. Daybreak also uses hand-written fakes. |
+| A separate `:core:testing` module | Common in Google's samples and equally valid. `testFixtures` keeps fakes next to the ports they implement and avoids one more module (HLD risk R-5). |
+
+### Tradeoffs accepted
+
+Fakes must be maintained when a port changes. The fakes themselves run the repository contract checks where one exists (for example the compare-and-set rules of ADR-22), so they stay faithful.
 
 ---
 

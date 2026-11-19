@@ -302,4 +302,4 @@ These are tracked so later documents can resolve them. None blocks the HLD.
 
 ## 13. Traceability
 
-The test plan (to be written with the LLD) will map each **M** and **S** requirement to at least one automated or manual test. Requirement IDs are stable: a removed requirement is marked "Withdrawn" with a reason rather than renumbered.
+The test plan in [LLD Section 11](LOW_LEVEL_DESIGN.md#11-test-plan) maps each **M** and **S** requirement to at least one automated or manual test. Requirement IDs are stable: a removed requirement is marked "Withdrawn" with a reason rather than renumbered.
