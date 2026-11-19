@@ -2,7 +2,7 @@
 
 This is NotesMaker's living decision log, following the repository conventions in [AGENTS.md](../../../AGENTS.md). Each record has a stable ID, date, status, context, decision, alternatives with tradeoffs, consequences, and implementation status. When a decision changes, add a new record that supersedes the old one and link both, rather than editing away the original reasoning.
 
-ADR-01 to ADR-09 were made while writing the [product requirements](PRODUCT_REQUIREMENTS.md) and set product direction and constraints. ADR-10 to ADR-18 were made while writing the [high-level design](HIGH_LEVEL_DESIGN.md) and set structure, dependency injection, processing, recording, persistence and navigation. ADR-19 set the benchmark device tiers. ADR-20 to ADR-30 were made while writing the [low-level design](LOW_LEVEL_DESIGN.md) and [internal API design](API_DESIGN.md) and set error handling, engine and pipeline contracts, the schema, the native build, the download client, recording logic, prompts, voice activity detection, screen boundaries and test doubles.
+ADR-01 to ADR-09 were made while writing the [product requirements](PRODUCT_REQUIREMENTS.md) and set product direction and constraints. ADR-10 to ADR-18 were made while writing the [high-level design](HIGH_LEVEL_DESIGN.md) and set structure, dependency injection, processing, recording, persistence and navigation. ADR-19 set the benchmark device tiers. ADR-20 to ADR-30 were made while writing the [low-level design](LOW_LEVEL_DESIGN.md) and [internal API design](API_DESIGN.md) and set error handling, engine and pipeline contracts, the schema, the native build, the download client, recording logic, prompts, voice activity detection, screen boundaries and test doubles. ADR-31 to ADR-35 were made while building the project skeleton (LLD Section 12, step 1, with the persistence part of step 4 and the native build of step 3).
 
 Statuses: **Proposed** (awaiting maintainer review), **Accepted**, **Superseded by ADR-nn**. Facts about third-party libraries were checked against their documentation on 2026-11-18. Performance figures marked "to verify" will be measured in the transcription spike (ADR-02 follow-up) before the HLD fixes them.
 
@@ -38,6 +38,11 @@ Statuses: **Proposed** (awaiting maintainer review), **Accepted**, **Superseded 
 | [ADR-28](#adr-28--energy-based-voice-activity-detection-first-whispercpp-vad-evaluated-in-the-spike) | Energy VAD first; whisper.cpp VAD in the spike | Works before the spike, no extra model | May miss quiet speech |
 | [ADR-29](#adr-29--screens-call-use-cases-for-every-write-feature-modules-expose-only-entries-and-navigator-interfaces) | Writes via use cases; features expose entries and navigators | Rules stay in the domain; features independent | A few small classes |
 | [ADR-30](#adr-30--shared-fakes-and-contract-suites-in-testfixtures-no-mocking-library) | Shared fakes and contract suites in `testFixtures` | Faithful doubles, one place | Fakes need upkeep |
+| [ADR-31](#adr-31--repository-ports-get-contract-suites-run-against-the-fakes-and-room) | Repository contract suites, run against fakes (JVM) and Room (device) | Fakes provably behave like the database | Some tests run twice |
+| [ADR-32](#adr-32--whispercpp-1-9-5-linked-statically-into-one-jni-library-with-ndk-r28) | whisper.cpp 1.9.5 static in one JNI library; NDK r28; ARMv8.2 variant deferred | One library to load; checksum reproducible offline | No ARMv8.2 speed-up until the spike |
+| [ADR-33](#adr-33--clearing-a-transcript-keeps-its-revision) | Clearing a transcript keeps its revision | Old notes can never look current | A cleared transcript has a header row |
+| [ADR-34](#adr-34--ci-runs-jvm-tests-lint-and-the-apk-on-every-push-and-device-tests-on-api-26-and-35) | CI: JVM tests, lint, APK on every push; device tests on API 26 and 35 | Room, native and UI tests run on every change | About 20 minutes of emulator time per push |
+| [ADR-35](#adr-35--test-stack-junit-4-kotlin-test-coroutines-test-and-turbine-device-only-tests-run-instrumented) | JUnit 4, kotlin-test, coroutines-test, Turbine; Android behaviour tested on devices, no Robolectric | One test stack that runs on JVM and device | Slower feedback for Android-bound code |
 
 ---
 
@@ -353,7 +358,7 @@ More files and indirection than a two-layer app. Mapping between Room entities a
 
 - **Date:** 2026-11-18
 - **Status:** Proposed
-- **Implementation:** Not started. Module table in [HLD](HIGH_LEVEL_DESIGN.md) Section 4.
+- **Implementation:** Done in the skeleton (2026-11-19): every module of the HLD table exists, with seven convention plugins in `build-logic` and a `checkModuleGraph` task run in CI. Media, processing, three feature modules and two engine modules are still empty. Module table in [HLD](HIGH_LEVEL_DESIGN.md) Section 4.
 
 ### Context
 
@@ -387,7 +392,7 @@ About 14 modules plus `build-logic` for a small app: slower first build, more Gr
 
 - **Date:** 2026-11-18
 - **Status:** Proposed
-- **Implementation:** Not started.
+- **Implementation:** Partly done (2026-11-19): Hilt with KSP; `:core:data` binds the persistence and environment ports; `:app` declares the empty engine sets with `@Multibinds` and checks unique engine IDs in debug builds; an instrumented test checks the assembled graph. Workers, ViewModels and engine bindings come with their modules.
 
 ### Context
 
@@ -640,7 +645,7 @@ Peak memory under 1.5 GB applies to every tier.
 
 - **Date:** 2026-11-19
 - **Status:** Proposed
-- **Implementation:** Not started. [API design](API_DESIGN.md) Section 1.3.
+- **Implementation:** Done for the types (2026-11-19): `Outcome`, the failure hierarchies, `runCatchingCancellable` and `ProcessingFailureCodec` in `:core:domain`, and the failure-to-message mapping in `:core:ui`. The lint rule against `runCatching` is not written yet. [API design](API_DESIGN.md) Section 1.3.
 
 ### Context
 
@@ -672,7 +677,7 @@ Some `map` and `flatMap` boilerplate in use cases. Two error styles coexist (val
 
 - **Date:** 2026-11-19
 - **Status:** Proposed
-- **Implementation:** Not started. [API design](API_DESIGN.md) Section 5.2.
+- **Implementation:** Contract done (2026-11-19): the interface and `TranscriptionEngineContract`, passed by `FakeTranscriptionEngine`. The whisper engine comes with the spike. [API design](API_DESIGN.md) Section 5.2.
 
 ### Context
 
@@ -700,7 +705,7 @@ Each engine handles resuming from a position itself. The whisper engine needs a 
 
 - **Date:** 2026-11-19
 - **Status:** Proposed
-- **Implementation:** Not started. [LLD](LOW_LEVEL_DESIGN.md) Section 5.1.
+- **Implementation:** Partly done (2026-11-19): `SessionRepository.transition` is a single SQL `UPDATE ... WHERE status IN (...)` in Room and an atomic update in the fake, both checked by `SessionRepositoryContract`, including a concurrent-race test. `SessionStateMachine` comes with the domain core step. [LLD](LOW_LEVEL_DESIGN.md) Section 5.1.
 
 ### Context
 
@@ -731,7 +736,7 @@ Callers must handle "transition did not apply", which is a little more code at e
 
 - **Date:** 2026-11-19
 - **Status:** Proposed
-- **Implementation:** Not started. [LLD](LOW_LEVEL_DESIGN.md) Section 3.
+- **Implementation:** Done for schema version 1 (2026-11-19), committed under `core/data/schemas/`. One change from the LLD sketch: the `trigger` column is named `pipeline_trigger`, because `TRIGGER` is an SQL keyword and every hand-written query or migration would have to quote it. [LLD](LOW_LEVEL_DESIGN.md) Section 3.
 
 ### Context
 
@@ -765,7 +770,7 @@ JSON columns need a `TypeConverter` and cannot be searched in SQL; full-text sea
 
 - **Date:** 2026-11-19
 - **Status:** Proposed
-- **Implementation:** Not started. Resolves HLD open question OQ-6. [LLD](LOW_LEVEL_DESIGN.md) Section 1.3.
+- **Implementation:** Done for the baseline library (2026-11-19), see ADR-32. The ARMv8.2 variant is deferred to the spike. Resolves HLD open question OQ-6. [LLD](LOW_LEVEL_DESIGN.md) Section 1.3.
 
 ### Context
 
@@ -935,7 +940,7 @@ A few small use cases and one interface per feature. Navigation callbacks are sl
 
 - **Date:** 2026-11-19
 - **Status:** Proposed
-- **Implementation:** Not started. [API design](API_DESIGN.md) Section 11, [LLD](LOW_LEVEL_DESIGN.md) Section 11.
+- **Implementation:** Done (2026-11-19): five plug-in contract suites, three repository suites (ADR-31) and fakes for every port in `core/domain/src/testFixtures`. Each fake passes its suite, and a test feeds each plug-in suite a broken implementation to prove it fails. [API design](API_DESIGN.md) Section 11, [LLD](LOW_LEVEL_DESIGN.md) Section 11.
 
 ### Context
 
@@ -958,6 +963,161 @@ Fakes must be maintained when a port changes. The fakes themselves run the repos
 
 ---
 
+## ADR-31 — Repository ports get contract suites, run against the fakes and Room
+
+- **Date:** 2026-11-19
+- **Status:** Proposed
+- **Implementation:** Done (2026-11-19). `SessionRepositoryContract`, `TranscriptRepositoryContract` and `NotesRepositoryContract` in `core/domain/src/testFixtures`; run by `FakesPassTheContractsTest` on the JVM and `RoomRepositoryContractTests` on emulators. Extends ADR-30.
+
+### Context
+
+ADR-30 gave every port a shared fake so use-case, ViewModel and worker tests do not need mocks. A fake is only useful if it behaves like production. ADR-30 noted that fakes "run the repository contract checks where one exists", but the API design only listed contract suites for plug-in APIs. The repositories carry the subtlest rules in the app: compare-and-set transitions (ADR-22), checkpoints that move only with their segments (ADR-13), idempotent replace (NFR-21), cascading deletes.
+
+### Decision
+
+Each persistence port has an abstract JUnit suite in `testFixtures`. A subclass supplies a fresh store through `openPersistence()`. The same suites run twice: against `FakePersistence` in `:core:domain` JVM tests, and against an in-memory Room database in `:core:data` instrumented tests. The suites cover field-by-field round trips, the effects of each `StatusChange`, a 16-way concurrent transition race, queue order, duplicate segment indexes, cascades and Flow re-emission (with Turbine).
+
+`FakePersistence` is one in-memory store behind the three repositories, so deleting a session cascades like the foreign keys, and every write is one atomic `MutableStateFlow.update`, which gives the same all-or-nothing behaviour as an SQL statement.
+
+### Alternatives considered
+
+| Alternative | Assessment |
+| --- | --- |
+| Test Room repositories with their own instrumented tests, fakes untested | Simpler. But the fake and the database can drift without anyone noticing, and then every test that uses the fake tells a comforting lie. |
+| No fakes; every repository test uses an in-memory Room database | Exact behaviour, but needs a device or Robolectric for every use-case test, and makes JVM tests of the domain impossible (NFR-64). |
+| Robolectric to run the Room suites on the JVM | Faster than an emulator, but it uses the host's SQLite through a shadow, which is not the device's SQLite, and adds a large dependency (ADR-35). |
+
+### Tradeoffs accepted
+
+The repository rules are tested twice. Every port change edits the port, the fake, the adapter and the suite together, which is the point. Exceptions differ between the two (`IllegalStateException` against `SQLiteConstraintException`), so the suites only assert that a constraint violation fails, not how.
+
+---
+
+## ADR-32 — whisper.cpp 1.9.5 linked statically into one JNI library, with NDK r28
+
+- **Date:** 2026-11-19
+- **Status:** Proposed
+- **Implementation:** Done (2026-11-19). `engine/whisper/src/main/cpp/CMakeLists.txt`, `jni_bridge.cpp`, versions in `gradle/libs.versions.toml`. Refines ADR-24.
+
+### Context
+
+ADR-24 chose FetchContent with a pinned archive and SHA-256, and planned a second `arm64-v8a` library built for ARMv8.2 (dot product and FP16). Building the skeleton fixed the remaining details: which release, how the checksum is trusted, how whisper.cpp and ggml are linked, and which NDK.
+
+### Decision
+
+1. **Version 1.9.5** (released 2026-10-06), the latest release when the skeleton was built. Its archive SHA-256 is `ff1a9053…dc1720`.
+2. **How the checksum was obtained.** GitHub's tag archive is `git archive --prefix=whisper.cpp-<version>/ v<version> | gzip -n`, byte for byte. This was confirmed on v1.8.6, whose archive hash is published independently in vcpkg's port (SHA-512, matching). The 1.9.5 hash was computed the same way from the tag and checked by a CMake build with that URL hash. Anyone can reproduce it from a clone, without trusting a download. The procedure is in `engine/whisper/README.md`.
+3. **One static library.** whisper.cpp and ggml are built as static libraries (`BUILD_SHARED_LIBS OFF`) and linked into one `libnotesmaker_whisper.so`, with `c++_static`. ggml's own thread pool (`GGML_OPENMP OFF`), no `-march=native` (`GGML_NATIVE OFF`) and the CPU backend linked in, not loaded as a plug-in (`GGML_BACKEND_DL OFF`). `WHISPER_BUILD_IS_DEV OFF`, as whisper.cpp asks for release tags, so `whisper_version()` reports exactly the pinned version, which an instrumented test checks.
+4. **Native code is always optimized.** `CMAKE_BUILD_TYPE` is forced to `Release` in every app build type (LLD Section 1.3), with a `NOTESMAKER_NATIVE_DEBUG` switch to step through native code.
+5. **NDK r28c (28.2.13676358) and CMake 3.22.1**, pinned in the catalog. r28 aligns native libraries to 16 KB pages by default, which Google Play requires for apps targeting Android 15+; the linker flag is also stated explicitly.
+6. **The ARMv8.2 variant is deferred to the transcription spike.** ggml is a single CMake target, so a second variant with different compiler flags needs either two complete builds (ExternalProject) or ggml's dynamic CPU backend variants. The spike measures the speed-up on tiers M and H first (ADR-19). Until then every device loads the baseline library.
+
+### Alternatives considered
+
+| Alternative | Assessment |
+| --- | --- |
+| Pin by git commit (`FetchContent` with `GIT_TAG <sha>`) | A commit SHA is a content hash too, and needs no archive checksum. But it needs `git` at build time, downloads history, and ADR-24 chose the archive for that reason. |
+| Shared libraries (`libwhisper.so`, `libggml*.so`) | Matches whisper.cpp's default. Three or more libraries to package and load in order, and no link-time dead-code removal across them. |
+| NDK r27 (AGP 8.13's default) | No download beyond AGP's default, but needs the 16 KB alignment flag on every library and is older. |
+| Build the ARMv8.2 variant now | ADR-24's plan. Doubles native build time before anyone has measured the gain. |
+
+### Tradeoffs accepted
+
+Until the spike, phones run the baseline ARMv8.0 code and are slower than they could be. x86_64 builds use ggml's default x86 feature set (AVX2 and FMA), which every current emulator host has, but a very old x86 host without AVX2 would crash; tier E is a modern runner (ADR-19).
+
+---
+
+## ADR-33 — Clearing a transcript keeps its revision
+
+- **Date:** 2026-11-19
+- **Status:** Proposed
+- **Implementation:** Done (2026-11-19). `TranscriptRepository.clear`, checked by `TranscriptRepositoryContract.clearKeepsTheRevisionSoOldNotesLookStale`.
+
+### Context
+
+`notes.transcript_revision` records which transcript the notes were built from, and `GenerateNotesStage.isComplete` compares it with `transcripts.revision` (LLD Section 3.1). The LLD let `clear` (used when the engine changes and transcription starts again) delete the transcript row. The revision would then restart at 0, and after one completion would be 1 again, equal to the revision of notes built from the old transcript. The stage would treat stale notes as current.
+
+### Decision
+
+`clear` deletes the segments and resets the checkpoint (`committed_until_ms = 0`, `next_index = 0`, `complete = 0`) but keeps the row and its revision. The next `markComplete` therefore produces a revision no earlier notes used. A cleared transcript has a checkpoint at 0, which the transcribe stage treats like "start from the beginning".
+
+### Alternatives considered
+
+| Alternative | Assessment |
+| --- | --- |
+| Delete the row and also delete the notes | Correct, but loses the user's notes before the new transcript exists, and couples two repositories. |
+| A global, monotonically increasing revision counter | Also correct, but needs a second table or sequence for a problem one kept column solves. |
+
+### Tradeoffs accepted
+
+"Never started" (no row) and "cleared" (row at 0) are different states; callers that only ask for the checkpoint position see no difference.
+
+---
+
+## ADR-34 — CI runs JVM tests, lint and the APK on every push, and device tests on API 26 and 35
+
+- **Date:** 2026-11-19
+- **Status:** Proposed
+- **Implementation:** Done (2026-11-19). `.github/workflows/notesmaker.yml`.
+
+### Context
+
+The maintainer asked that every module be properly testable with unit tests and, where needed, instrumentation tests. The Room repositories, the native library, Compose UI and the Hilt graph can only be tested honestly on Android. LLD Section 12 says each step ends with green CI.
+
+### Decision
+
+The `NotesMaker checks` workflow runs on changes under `apps/notesmaker/`:
+
+- **build**: `checkModuleGraph`, the `build-logic` tests, JVM unit tests of every module, `assembleDebug` (which compiles whisper.cpp for both ABIs), `lintDebug`, and a check that the Room schema under `core/data/schemas/` is committed and current.
+- **instrumented**: `connectedDebugAndroidTest` on x86_64 emulators at API 26 (the minimum, ADR-07) and API 35, in parallel. These run the Room contract and schema tests, the native library tests, Compose UI tests and the Hilt graph tests.
+
+The CMake download and native build directory are cached by whisper.cpp version and native sources.
+
+### Alternatives considered
+
+| Alternative | Assessment |
+| --- | --- |
+| Instrumented tests only on demand or nightly | Faster pushes, but Room and native breakages would surface late, which defeats "every module properly testable". |
+| One emulator at a single API level | Halves the time, but API 26 is where old-platform bugs hide, and a current level is needed for current behaviour. |
+| Firebase Test Lab or another device farm | Real devices, but needs a paid account and secrets in a public sample repository. Real-device checks stay in the manual matrix (ADR-19). |
+
+### Tradeoffs accepted
+
+Each push costs about 20 minutes of emulator time per API level. Emulators can be flaky; the job does not retry automatically, so a flaky test is visible instead of hidden.
+
+---
+
+## ADR-35 — Test stack: JUnit 4, kotlin-test, coroutines-test and Turbine; device-only tests run instrumented
+
+- **Date:** 2026-11-19
+- **Status:** Proposed
+- **Implementation:** Done (2026-11-19). Added by the convention plugins to every module.
+
+### Context
+
+The contract suites (ADR-30, ADR-31) must run both on the JVM and on a device, from one source set shared through `testFixtures`.
+
+### Decision
+
+- **JUnit 4** everywhere, because the AndroidX test runner and Compose UI tests are JUnit 4, and one suite must run in both places.
+- **kotlin-test** assertions (`assertEquals`, `assertIs`, `assertFails`), which read naturally in Kotlin and need no extra library.
+- **kotlinx-coroutines-test** (`runTest`) and **Turbine** for Flows.
+- **No mocking library** (ADR-30) and **no Robolectric**: code that needs Android runs on an emulator. JVM unit tests fail loudly if they touch an unmocked Android method (`isReturnDefaultValues = false`), which pushes Android-bound logic into a device test or out into pure Kotlin.
+
+### Alternatives considered
+
+| Alternative | Assessment |
+| --- | --- |
+| JUnit 5 for JVM modules | Nicer parameterized and nested tests, but the shared suites would need the JUnit Vintage engine or two copies, since instrumented tests are JUnit 4. |
+| Google Truth or AssertK | Richer failure messages, one more dependency and style; kotlin-test covers what the suites need. |
+| Robolectric for Room and Compose | Faster than emulators. It simulates the framework, and its SQLite is the host's, so a passing test proves less (ADR-31). |
+
+### Tradeoffs accepted
+
+Device tests are slower than JVM tests, so most logic is kept in pure Kotlin (the reason for ADR-10 and ADR-26) and the device tests stay few and focused.
+
+---
+
 ## Sources
 
 - ML Kit GenAI overview (APIs, status, device lists, foreground and quota limits): https://developers.google.com/ml-kit/genai
@@ -965,6 +1125,8 @@ Fakes must be maintained when a port changes. The fakes themselves run the repos
 - ML Kit GenAI Summarization: https://developers.google.com/ml-kit/genai/summarization/android
 - Android Developers Blog, on-device inference (July 2026): https://android-developers.googleblog.com/2026/07/android-on-device-inference.html
 - whisper.cpp: https://github.com/ggml-org/whisper.cpp
+- vcpkg whisper-cpp port (independent archive checksum for v1.8.6): https://github.com/microsoft/vcpkg/tree/master/ports/whisper-cpp
+- Android 16 KB page size support: https://developer.android.com/guide/practices/page-sizes
 - Vosk: https://alphacephei.com/vosk/
 - Android `RecognizerIntent` reference: https://developer.android.com/reference/android/speech/RecognizerIntent
 - Jetpack Navigation 3 is stable (November 2025): https://android-developers.googleblog.com/2025/11/jetpack-navigation-3-is-stable.html
