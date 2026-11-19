@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="capture_title">New session</string>
+    <string name="capture_intro">Record a class or import an audio file. NotesMaker transcribes it on this phone and writes structured notes.</string>
+    <string name="capture_record_title">Record a session</string>
+    <string name="capture_record_description">Capture a live class with the microphone</string>
+    <string name="capture_import_title">Import an audio file</string>
+    <string name="capture_import_description">Use a recording you already have</string>
+</resources>

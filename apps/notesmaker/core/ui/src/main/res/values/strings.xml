@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Processing failures (NFR-23). Each names what happened and what helps. -->
+    <string name="failure_model_missing">The speech model is not installed. Install it to transcribe this session.</string>
+    <string name="failure_audio_unreadable">This audio could not be read. The file may be damaged.</string>
+    <string name="failure_out_of_memory">The phone ran out of memory while processing. Close other apps and try again.</string>
+    <string name="failure_engine_unavailable">The selected engine is not available right now. Try again later.</string>
+    <string name="failure_storage_full">The phone is out of storage. Free up some space and try again.</string>
+    <string name="failure_timed_out">Processing took too long and was stopped. Try again.</string>
+    <string name="failure_cancelled">Cancelled</string>
+    <string name="failure_unknown">Something went wrong while processing. Try again.</string>
+
+    <!-- Capture failures -->
+    <string name="capture_permission_denied">NotesMaker needs microphone access to record. Allow it in Settings.</string>
+    <string name="capture_microphone_busy">Another app is using the microphone.</string>
+    <string name="capture_insufficient_storage">There may not be enough free storage for a long recording.</string>
+    <string name="capture_unsupported_format">This audio format is not supported.</string>
+    <string name="capture_corrupt">This file is damaged or is not audio.</string>
+    <string name="capture_too_long">This recording is longer than the %1$d-hour limit.</string>
+    <string name="capture_source_unavailable">The file is no longer available. Pick it again.</string>
+</resources>
