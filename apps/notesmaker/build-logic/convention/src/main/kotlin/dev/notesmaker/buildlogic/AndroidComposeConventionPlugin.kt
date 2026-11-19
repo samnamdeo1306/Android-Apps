@@ -4,7 +4,6 @@ import com.android.build.api.dsl.CommonExtension
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.kotlin.dsl.dependencies
-import org.gradle.kotlin.dsl.getByType
 
 /** Compose compiler, BOM, tooling and Compose UI test setup. Apply after an Android plugin. */
 class AndroidComposeConventionPlugin : Plugin<Project> {
@@ -14,9 +13,9 @@ class AndroidComposeConventionPlugin : Plugin<Project> {
         }
         pluginManager.apply("org.jetbrains.kotlin.plugin.compose")
 
-        extensions.getByType<CommonExtension<*, *, *, *, *, *>>().apply {
-            buildFeatures.compose = true
-        }
+        // Look up by raw class: the reified getByType<CommonExtension<*, ...>>() matches the
+        // parameterized type exactly and misses ApplicationExtension and LibraryExtension.
+        extensions.getByType(CommonExtension::class.java).buildFeatures.compose = true
 
         dependencies {
             val bom = platform(libs.library("compose-bom"))
