@@ -1,7 +1,7 @@
 # High-level design — NotesMaker
 
-Status: **Draft v0.1 (2026-11-18)**. Design only; no code exists yet.
-Inputs: [product requirements](PRODUCT_REQUIREMENTS.md) (FR/NFR IDs) and [decision log](DECISIONS.md) (ADR-01 to ADR-09). New decisions made in this document are ADR-10 to ADR-18.
+Status: **Draft v0.2 (2026-11-19)**. Design only; no code exists yet.
+Inputs: [product requirements](PRODUCT_REQUIREMENTS.md) (FR/NFR IDs) and [decision log](DECISIONS.md) (ADR-01 to ADR-09). New decisions made in this document are ADR-10 to ADR-18; ADR-19 sets the benchmark device tiers.
 Next: the low-level design (LLD) fixes class signatures, database schema, threading details and the internal API contracts. Where this document names an interface, the name is a working name and its exact signature belongs to the LLD.
 
 ## 1. Purpose and scope
@@ -478,17 +478,34 @@ CI follows the repository convention: a `notesmaker.yml` workflow scoped to `app
 | FR-70 to FR-73 Settings | Settings and Models screens, `ListEngines`, `InstallModel` |
 | NFR-60 to NFR-66 Modularity | Sections 4, 5.2 and 8 |
 
+## 10a. Performance validation
+
+Performance targets (PRD Section 7.2) are set per device tier (ADR-19):
+
+| Tier | Device | What it validates |
+| --- | --- | --- |
+| E | Android emulator, API 36, 4 GB RAM | Everything functional: flows, recovery, migrations, UI tests. Peak memory at the 4 GB floor. Trends between builds on the same host. |
+| M | Samsung Galaxy A-series (A3x/A5x class) | Pass/fail for cold start, real-time factor, basic notes time, list scrolling. The built-in notes path, since Gemini Nano is not expected. |
+| H | Pixel 8 Pro | Upper-bound speed; the Gemini Nano notes path if the Prompt API supports this device (to verify in the spike). |
+
+Consequences for the design:
+
+- `:engine:whisper` builds for both `arm64-v8a` (phones) and `x86_64` (emulator). The x86_64 build is a supported development target, not a performance reference.
+- On the emulator, Gemini Nano is unavailable, so the LLM note path is developed against a fake `LanguageModel` (risk R-2), and selection-policy behavior is tested on the JVM.
+- Benchmarks record device model, Android version, RAM, model file and build type, so results from different phones are comparable. A Macrobenchmark module for cold start and list scrolling is planned in the LLD.
+
 ## 11. Risks and open questions
 
 | ID | Risk or question | Impact | Plan |
 | --- | --- | --- | --- |
-| R-1 | whisper.cpp is slower than real time on the reference device with the default model | NFR-11 missed; long waits | Spike first (ADR-02). Fallbacks: smaller default model, VAD, or Vosk as a "fast draft" engine through the same port |
+| R-1 | whisper.cpp is slower than real time on the mid-range test phone (tier M) with the default model | NFR-11 missed; long waits | Spike first (ADR-02). Fallbacks: smaller default model, VAD, or Vosk as a "fast draft" engine through the same port |
 | R-2 | Gemini Nano is unavailable on the maintainer's device | The LLM path cannot be tested on real hardware | Develop `LlmNoteGenerator` against a fake `LanguageModel` in JVM tests; consider a local Gemma adapter earlier if needed |
 | R-3 | Foreground service start is refused after reboot or from the background | Processing resumes later than expected | Documented behavior (Section 6.6); retry with backoff; resume on next app open |
 | R-4 | ADTS recovery or remux has device-specific codec issues | FR-05 at risk | Instrumented round-trip test; keep the ADTS file until remux verification passes |
 | R-5 | 15 modules slow the build and confuse a newcomer | Learning friction | Convention plugins keep each module's build file short; module map in the README; modules can be merged later without changing the domain |
 | R-6 | LLM output does not follow the structure | Notes fail and fall back to basic too often | Structured output where the API supports it, strict validation, one retry, prompts tested on spike transcripts |
-| OQ-3 | Reference device for benchmarks (PRD) | NFR-10 to NFR-13 targets | **Still open.** Needs the maintainer to name the phone they will benchmark on. |
+| OQ-3 | Reference device for benchmarks (PRD) | NFR-10 to NFR-13 targets | **Resolved (ADR-19):** emulator baseline, Galaxy A-series for mid-range and Pixel 8 Pro for high-end targets. |
+| R-7 | Emulator speed misleads: it depends on the host and on x86_64 builds of whisper.cpp | Wrong conclusions about performance | Speed pass/fail only on tiers M and H; emulator numbers used for trends between builds on the same host (ADR-19) |
 | OQ-6 | whisper.cpp source pinning: git submodule, CMake `FetchContent` or vendored copy | Build reproducibility and CI time | Decide in the LLD |
 | OQ-7 | HTTP client for model download: OkHttp or `HttpURLConnection` | One dependency | Decide in the LLD |
 

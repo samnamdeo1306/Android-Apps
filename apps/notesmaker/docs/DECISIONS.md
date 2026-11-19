@@ -26,6 +26,7 @@ Statuses: **Proposed** (awaiting maintainer review), **Accepted**, **Superseded 
 | [ADR-16](#adr-16--structured-notes-model-llm-generators-share-one-chunk-then-combine-implementation) | Structured notes; shared chunk-then-combine over a `LanguageModel` port | Timestamps and edits per item; one tested chunking path | Generic chunking for every model |
 | [ADR-17](#adr-17--navigation-3-with-an-adaptive-list-detail-layout) | Navigation 3 with adaptive list-detail | Back stack as state; tablet layouts | Newer library, fewer examples |
 | [ADR-18](#adr-18--sort-titles-in-memory-with-a-locale-aware-collator-no-paging-in-01) | Locale-aware title sort in memory; no Paging | Correct accented sorting; simple | Loads all list rows at once |
+| [ADR-19](#adr-19--benchmark-device-tiers-emulator-baseline-galaxy-a-series-and-pixel-8-pro) | Emulator baseline; Galaxy A-series and Pixel 8 Pro for speed targets | Fast daily iteration; realistic targets on real phones | Emulator speed is not representative |
 
 ---
 
@@ -85,7 +86,7 @@ The maintainer prefers transcription on the device. The app must transcribe both
 2. Transcription is defined by a domain interface (working name `TranscriptionEngine`) with a capability check (NFR-65). The pipeline does not know which engine runs.
 3. **whisper.cpp is the primary engine for 0.1**, with an English-only quantized base model as the default and a small model as the "more accurate" option (FR-35). Final model choice depends on the spike results.
 4. **ML Kit GenAI Speech Recognition is a planned second adapter** for supported devices once it leaves alpha, or earlier as a learning exercise. It must respect its foreground-only constraint (see ADR-03).
-5. Vosk and the platform recognizer are not planned. Vosk may become a "fast draft" option if whisper.cpp proves too slow on the reference device.
+5. Vosk and the platform recognizer are not planned. Vosk may become a "fast draft" option if whisper.cpp proves too slow on the mid-range test phone (ADR-19).
 
 ### Reasoning
 
@@ -99,7 +100,7 @@ whisper.cpp is the only option that meets all of: any recent arm64 device, file 
 
 ### Follow-up and verification
 
-1. **Spike:** transcribe a 10-minute and a 60-minute lecture-style clip with tiny.en, base.en and small.en (quantized) on the reference device. Record real-time factor, peak memory, battery drop and word error rate. Update NFR-11 and NFR-13 with measured targets.
+1. **Spike:** transcribe a 10-minute and a 60-minute lecture-style clip with tiny.en, base.en and small.en (quantized) on the test devices from ADR-19. Record real-time factor, peak memory, battery drop and word error rate. Update NFR-11 and NFR-13 with measured targets.
 2. Try voice activity detection to skip silence and reduce invented text.
 3. Re-evaluate ML Kit GenAI Speech Recognition when it reaches beta.
 
@@ -577,6 +578,50 @@ Date sorting is done in SQL. Title sorting is done in the domain with a locale-a
 ### Tradeoffs accepted
 
 All session list rows are loaded at once. Revisit when full-text search over transcripts (FR-55 stretch) or much larger libraries make paging worthwhile.
+
+---
+
+## ADR-19 — Benchmark device tiers: emulator baseline, Galaxy A-series and Pixel 8 Pro
+
+- **Date:** 2026-11-19
+- **Status:** Accepted (maintainer's choice, 2026-11-19)
+- **Implementation:** Not started. Applies from the transcription spike onward. Resolves PRD OQ-3.
+
+### Context
+
+The PRD set performance targets for an unnamed "reference mid-range device" (OQ-3). The maintainer will develop on the emulator for now and test on mid-range and high-end phones, including a Samsung Galaxy A-series phone and a Pixel 8 Pro.
+
+### Decision
+
+Targets are set per tier (PRD Section 7.2, HLD Section 10a):
+
+| Tier | Device | Role |
+| --- | --- | --- |
+| E | Android emulator, API 36, 4 GB RAM | Daily development baseline: functional checks, memory at the 4 GB floor, trends between builds. No pass/fail speed targets. |
+| M | Samsung Galaxy A-series (A3x/A5x class) | Main pass/fail tier: cold start under 1.5 s, real-time factor at or below 1.0, basic notes within 30 s, smooth list. |
+| H | Pixel 8 Pro | Upper bound: cold start under 1 s, real-time factor at or below 0.5, on-device LLM notes within 10 min if supported. |
+
+Peak memory under 1.5 GB applies to every tier.
+
+### Reasoning
+
+- The emulator is what the maintainer has available every day, so functional work and tests must not depend on a phone.
+- Emulator speed depends on the host computer, and the emulator usually runs an x86_64 build of whisper.cpp with different CPU instructions from phones. Treating its timings as pass/fail would give misleading results in both directions. Memory use and functional behavior, in contrast, carry over well.
+- A Galaxy A-series phone is a realistic "typical teacher's phone" and is not expected to support Gemini Nano, so it exercises the guaranteed built-in notes path (ADR-04). The Pixel 8 Pro shows how good the experience can get and is the likely device for trying the on-device LLM path.
+
+### Alternatives considered
+
+| Alternative | Assessment |
+| --- | --- |
+| One reference mid-range phone only (the PRD's assumption) | Simpler, but gives no view of the high end and no check of the Gemini Nano path. |
+| Emulator as the only reference | Always available, but speed results are not meaningful for real users. |
+| Firebase Test Lab or another device farm | Wide coverage, but costs money and setup, and long transcription runs are slow to iterate on. A possible later addition. |
+
+### Tradeoffs accepted
+
+- Speed regressions may go unnoticed between real-device runs. Mitigated by tracking emulator trends on the same host.
+- "Galaxy A-series" covers a range of chips. The exact model tested is recorded with each result, and targets are revisited if the phone used is much older or newer than the A3x/A5x class.
+- Whether the Pixel 8 Pro supports the ML Kit GenAI Prompt API must be checked against the current device list; if it does not, the H tier only tests speed and the LLM path stays on fakes.
 
 ---
 
