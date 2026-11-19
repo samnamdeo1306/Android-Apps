@@ -7,7 +7,7 @@ A collection of independent Android sample applications for learning, experiment
 | Sample | Purpose | Stack | Documentation |
 | --- | --- | --- | --- |
 | [Daybreak](apps/daybreak/) | Alarm app with question/puzzle challenges for snooze and dismiss | Kotlin, Compose, Room, coroutines, Flow | [Project overview](apps/daybreak/README.md) · [PRD](apps/daybreak/docs/PRODUCT_REQUIREMENTS.md) · [Architecture](apps/daybreak/docs/ARCHITECTURE.md) |
-| [NotesMaker](apps/notesmaker/) | Turns recorded or imported lectures into on-device transcripts and structured notes (planning) | Kotlin, Compose (planned) | [Project overview](apps/notesmaker/README.md) · [PRD](apps/notesmaker/docs/PRODUCT_REQUIREMENTS.md) · [HLD](apps/notesmaker/docs/HIGH_LEVEL_DESIGN.md) · [Decisions](apps/notesmaker/docs/DECISIONS.md) |
+| [NotesMaker](apps/notesmaker/) | Turns recorded or imported lectures into on-device transcripts and structured notes (foundation in progress) | Kotlin, Compose, Room, Hilt, whisper.cpp (NDK) | [Project overview](apps/notesmaker/README.md) · [PRD](apps/notesmaker/docs/PRODUCT_REQUIREMENTS.md) · [HLD](apps/notesmaker/docs/HIGH_LEVEL_DESIGN.md) · [Decisions](apps/notesmaker/docs/DECISIONS.md) |
 
 ## Repository layout
 
@@ -26,7 +26,7 @@ Android-Apps/
 │   │   ├── build.gradle.kts
 │   │   ├── README.md
 │   │   └── CHANGELOG.md
-│   └── notesmaker/              # Planning: requirements and decisions only
+│   └── notesmaker/              # Lecture notes app: foundation modules and design docs
 ├── docs/                       # Repository-wide conventions
 ├── .github/workflows/          # Sample-specific CI workflows
 └── README.md                   # Sample catalog and entry point
