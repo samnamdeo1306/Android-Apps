@@ -1,9 +1,9 @@
 package dev.notesmaker.buildlogic
 
 import dev.notesmaker.buildlogic.ModuleGraphRules.Edge
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertTrue
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Test
 
 class ModuleGraphRulesTest {
 
@@ -28,7 +28,7 @@ class ModuleGraphRulesTest {
             ":engine:notes-basic" to ":core:domain",
             ":export:text" to ":core:domain",
         )
-        assertEquals(emptyList(), violations(*designed))
+        assertEquals(emptyList<String>(), violations(*designed))
     }
 
     @Test
@@ -38,7 +38,7 @@ class ModuleGraphRulesTest {
 
     @Test
     fun `a module may use its own test fixtures`() {
-        assertEquals(emptyList(), violations(":core:domain" to ":core:domain"))
+        assertEquals(emptyList<String>(), violations(":core:domain" to ":core:domain"))
     }
 
     @Test

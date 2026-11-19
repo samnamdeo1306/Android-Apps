@@ -16,8 +16,8 @@ dependencies {
     compileOnly(libs.ksp.gradlePlugin)
     compileOnly(libs.hilt.gradlePlugin)
 
+    // JUnit only: kotlin-dsl compiles with Gradle's embedded Kotlin, which can't read kotlin-test 2.2 metadata.
     testImplementation(libs.junit)
-    testImplementation(libs.kotlin.test)
 }
 
 tasks.test {
