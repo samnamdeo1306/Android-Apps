@@ -288,7 +288,7 @@ These are tracked so later documents can resolve them. None blocks the HLD.
 | --- | --- | --- |
 | OQ-1 | Which languages besides English should come first? | English only for 0.1, with the pipeline language-aware (FR-34). |
 | OQ-2 | Is live captioning during recording needed for 0.1? | No. Record first, process after (ADR-03). |
-| OQ-3 | Which reference device do we benchmark on? | A mid-range arm64 phone the maintainer owns. To be named in the HLD. |
+| OQ-3 | Which reference device do we benchmark on? | A mid-range arm64 phone the maintainer owns. Still open after the HLD (risk table, Section 11); needed before the transcription spike. |
 | OQ-4 | Which cloud provider, if any, for opt-in cloud engines? | Deferred to 0.3. The interface allows any. |
 | OQ-5 | Should notes formatting include formulas (LaTeX) for STEM teachers? | Plain text and Markdown for now. |
 
