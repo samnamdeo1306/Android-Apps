@@ -1,6 +1,6 @@
 # Product requirements — NotesMaker
 
-Status: **Draft v0.1 (2026-11-18)**, requirements only. No code exists yet. The high-level design (HLD), low-level design (LLD) and internal API design follow this document and may feed changes back into it.
+Status: **Draft v0.2 (2026-11-19)**, requirements only. No code exists yet. The high-level design (HLD), low-level design (LLD) and internal API design follow this document and may feed changes back into it.
 Owner: project maintainer. Purpose: a learning project for deep Android and Jetpack Compose practice, built as a usable tool.
 
 Every significant choice in this document is recorded with its reasoning, alternatives and tradeoffs in [DECISIONS.md](DECISIONS.md). Requirement rows reference those records as `ADR-nn`.
@@ -175,16 +175,24 @@ Priorities use MoSCoW: **M** must have for the first release, **S** should have,
 
 ### 7.2 Performance
 
-Targets are for a **reference mid-range device** (to be fixed during the HLD, for example a 2023 mid-range phone with 6 GB RAM). They will be measured in a benchmark spike before the design is finalized.
+Targets are set per **device tier** (ADR-19). The emulator is the everyday development baseline; speed targets are checked on real phones, because emulator speed depends on the host computer and its CPU differs from phone chips.
+
+| Tier | Device | Used for |
+| --- | --- | --- |
+| **E** Emulator | Android emulator, API 36 `x86_64` system image (an arm64 image on Apple silicon hosts), 4 GB RAM | Functional checks on every change, memory checks at the 4 GB floor, relative comparisons between builds. **Not** used for pass/fail speed targets. |
+| **M** Mid-range | A current Samsung Galaxy A-series phone (A3x/A5x class) | The main pass/fail tier for speed. Expected to have no Gemini Nano, so it exercises the built-in notes path. |
+| **H** High-end | Google Pixel 8 Pro | Upper-bound speed, and the on-device LLM path if the ML Kit GenAI Prompt API supports it (to verify). |
+
+The exact model, Android version and RAM of each test phone are recorded with every benchmark result. The targets below will be checked in the transcription spike (ADR-02) and may be revised, with an ADR, from the measured figures.
 
 | ID | Requirement |
 | --- | --- |
-| NFR-10 | App cold start to an interactive Capture screen in under 1.5 seconds. |
-| NFR-11 | Transcription with the default model is no slower than the audio length (real-time factor at or below 1.0). A 60-minute lecture is transcribed within 60 minutes. Stretch goal: 0.5. |
-| NFR-12 | Note generation for a 60-minute transcript completes within 10 minutes with an on-device model, and within 30 seconds with the basic method. |
-| NFR-13 | Peak memory during processing stays below 1.5 GB so the system does not kill the app on 4 GB devices. |
+| NFR-10 | App cold start to an interactive Capture screen: **M** under 1.5 seconds, **H** under 1 second. |
+| NFR-11 | Transcription with the default model: **M** real-time factor at or below 1.0 (a 60-minute lecture within 60 minutes), stretch 0.5; **H** at or below 0.5. **E** is measured for trends only. |
+| NFR-12 | Note generation for a 60-minute transcript: basic method within 30 seconds on **M** and **H**; on-device LLM within 10 minutes on **H** where supported. |
+| NFR-13 | Peak memory during processing stays below 1.5 GB on every tier, so the system does not kill the app on 4 GB devices. Checked on **E** configured with 4 GB RAM and confirmed on **M**. |
 | NFR-14 | The UI stays responsive (no dropped frames visible to the user, no "app not responding") during recording and processing. All heavy work runs off the main thread. |
-| NFR-15 | Sessions list scrolls smoothly with 1,000 sessions. |
+| NFR-15 | Sessions list scrolls smoothly with 1,000 sessions on **M**. |
 
 ### 7.3 Reliability and data integrity
 
@@ -274,7 +282,7 @@ These requirements turn the project's design goals into checkable rules. The HLD
 
 ## 11. Success criteria
 
-- A 60-minute English lecture recorded on the reference device produces a transcript and complete notes without user intervention beyond starting and stopping.
+- A 60-minute English lecture recorded on the mid-range test phone (tier M) produces a transcript and complete notes without user intervention beyond starting and stopping.
 - The transcript's word error rate on the test clips is within the range documented for the chosen model.
 - In a review of 5 real sessions, the maintainer judges titles and section headings as accurate and highlights as useful in at least 4 of 5.
 - A new engine or export format can be added in a single change that touches no existing engine, stage or screen, demonstrated at least once before 0.3.
@@ -288,7 +296,7 @@ These are tracked so later documents can resolve them. None blocks the HLD.
 | --- | --- | --- |
 | OQ-1 | Which languages besides English should come first? | English only for 0.1, with the pipeline language-aware (FR-34). |
 | OQ-2 | Is live captioning during recording needed for 0.1? | No. Record first, process after (ADR-03). |
-| OQ-3 | Which reference device do we benchmark on? | A mid-range arm64 phone the maintainer owns. Still open after the HLD (risk table, Section 11); needed before the transcription spike. |
+| OQ-3 | Which reference device do we benchmark on? | **Resolved 2026-11-19 (ADR-19):** emulator for daily development; Samsung Galaxy A-series (mid-range) and Pixel 8 Pro (high-end) for speed targets. See Section 7.2. |
 | OQ-4 | Which cloud provider, if any, for opt-in cloud engines? | Deferred to 0.3. The interface allows any. |
 | OQ-5 | Should notes formatting include formulas (LaTeX) for STEM teachers? | Plain text and Markdown for now. |
 
