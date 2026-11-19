@@ -3,6 +3,9 @@ pluginManagement {
     repositories {
         google()
         mavenCentral()
+        // Google's mirror of Maven Central. CI runners get intermittent "not found" answers from
+        // Maven Central and the Plugin Portal's proxy of it; this lets resolution fall through.
+        maven("https://maven-central.storage-download.googleapis.com/maven2/") { name = "MavenCentralMirror" }
         gradlePluginPortal()
     }
 }
@@ -12,6 +15,9 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // Google's mirror of Maven Central. CI runners get intermittent "not found" answers from
+        // Maven Central and the Plugin Portal's proxy of it; this lets resolution fall through.
+        maven("https://maven-central.storage-download.googleapis.com/maven2/") { name = "MavenCentralMirror" }
     }
 }
 
